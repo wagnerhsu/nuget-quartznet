@@ -1,0 +1,34 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 15
+VisualStudioVersion = 15.0.28124.53
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "QuartzWpf01", "QuartzWpf01\QuartzWpf01.csproj", "{9C682BD7-995C-4B3D-86F1-8E2977594EFA}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "QuartzWpf01Common", "QuartzWpf01Common\QuartzWpf01Common.csproj", "{418EE10D-0321-428F-AE9C-7967C54FBCB4}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MHScheduler", "MHScheduler\MHScheduler.csproj", "{AB91C9AE-0227-4F64-8CA2-1FB6332D53B5}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{9C682BD7-995C-4B3D-86F1-8E2977594EFA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9C682BD7-995C-4B3D-86F1-8E2977594EFA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9C682BD7-995C-4B3D-86F1-8E2977594EFA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9C682BD7-995C-4B3D-86F1-8E2977594EFA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{418EE10D-0321-428F-AE9C-7967C54FBCB4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{418EE10D-0321-428F-AE9C-7967C54FBCB4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{418EE10D-0321-428F-AE9C-7967C54FBCB4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{418EE10D-0321-428F-AE9C-7967C54FBCB4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AB91C9AE-0227-4F64-8CA2-1FB6332D53B5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AB91C9AE-0227-4F64-8CA2-1FB6332D53B5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AB91C9AE-0227-4F64-8CA2-1FB6332D53B5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AB91C9AE-0227-4F64-8CA2-1FB6332D53B5}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

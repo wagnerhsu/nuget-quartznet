@@ -1,0 +1,1 @@
+﻿Dir >> C:\temp\1.log
