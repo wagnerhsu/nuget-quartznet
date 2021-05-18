@@ -8,6 +8,7 @@ using Quartz.Impl;
 using Quartz.Impl.AdoJobStore;
 using Quartz.Impl.AdoJobStore.Common;
 using Quartz.Listener;
+using Quartz.Logging;
 using Quartz.Simpl;
 using Quartz.Util;
 
@@ -67,7 +68,7 @@ namespace Quartz.Tests.Integration.Core
                 connection.Open();
                 using (var command = connection.CreateCommand())
                 {
-                    command.CommandText = "SELECT TRIGGER_STATE from QRTZ_TRIGGERS";
+                    command.CommandText = $"SELECT TRIGGER_STATE from QRTZ_TRIGGERS WHERE SCHED_NAME = '{scheduler.SchedulerName}' AND TRIGGER_NAME='test'";
                     var triggerState = command.ExecuteScalar().ToString();
 
                     // check that trigger is blocked after fail over situation
@@ -118,7 +119,7 @@ namespace Quartz.Tests.Integration.Core
                 CancellationToken cancellationToken = new CancellationToken())
             {
                 isJobRecovered.Set();
-                return TaskUtil.CompletedTask;
+                return Task.CompletedTask;
             }
         }
 

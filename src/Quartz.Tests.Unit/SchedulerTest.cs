@@ -25,7 +25,7 @@ namespace Quartz.Tests.Unit
         {
             public Task Execute(IJobExecutionContext context)
             {
-                return TaskUtil.CompletedTask;
+                return Task.CompletedTask;
             }
         }
 
@@ -33,7 +33,7 @@ namespace Quartz.Tests.Unit
         {
             public Task Execute(IJobExecutionContext context)
             {
-                return TaskUtil.CompletedTask;
+                return Task.CompletedTask;
             }
         }
 
@@ -43,7 +43,7 @@ namespace Quartz.Tests.Unit
         {
             public Task Execute(IJobExecutionContext context)
             {
-                return TaskUtil.CompletedTask;
+                return Task.CompletedTask;
             }
         }
 
@@ -251,6 +251,8 @@ namespace Quartz.Tests.Unit
 
             await scheduler.Shutdown(true);
 
+            await Task.Delay(500);
+
             Assert.True(Process.GetCurrentProcess().Threads.Count <= activeThreads);
         }
 
@@ -290,7 +292,7 @@ namespace Quartz.Tests.Unit
         }
 
         [Test]
-        [Category("fragile")] // TODO seems that we have some trouble on Linux with this
+        [Platform(Exclude="Linux")]  // TODO seems that we have some trouble on Linux with this
         public async Task ReschedulingTriggerShouldKeepOriginalNextFireTime()
         {
             NameValueCollection properties = new NameValueCollection();

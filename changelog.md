@@ -2,23 +2,327 @@
 
 [http://www.quartz-scheduler.net](http://www.quartz-scheduler.net)
 
-## Release 3.0.7, Sep xx 2018
+## Release 3.3.2, Apr 9 2021
+
+This release returns the possibility to resolve jobs from Microsoft DI container. Now container is checked first and if not found then
+ActivatorUtilities is used to construct the type with constructor injection support. Now both AllowDefaultConstructor and CreateScope have
+been obsoleted as behavior is now either via DI construction or ActivatorUtilities and scope is always created to prevent resource leaks / double disposal.
+
+Also a problem with host name resolution under WSL2 scenario was fixed.
+
+* FIXES
+
+  * Try resolving jobs from service provider before resorting to ActivatorUtilities (#1159)
+  * Can't get hostname on WSL2+docker host network (#1158)
+
+
+## Release 3.3.1, Apr 8 2021
+
+This release fixes assembly signing problem introduced in 3.3.
+
+* FIXES
+
+  * Remove PublicSign property from csproj (#1155)
+
+
+## Release 3.3, Apr 7 2021
+
+This release addresses problems with using Quartz with .NET Full Framework lower than 4.7.2. ValueTask loading
+could fail due the dependencies brought with activity source support. Now activity sources are only supported when
+using .NET Framework >= 4.7.2 and netstandard >= 2.0. This also raises requirement the same way for package
+Quartz.OpenTelemetry.Instrumentation.
+
+This release also improves trigger acquisition performance when using persistent job store, mostly by reducing network round-trips.
+The semaphore implementations were also re-written to gain more performance.
+
+Also some bug fixes included, thanks to all contributors!
+
+* BREAKING CHANGES
+
+  * Activity source listener is not longer part of net461 build, only net472
+  * Quartz.AspNetCore integration package minimum .NET Core version is now 3.1 for HealthChecks support
+  
+* NEW FEATURES
+
+  * Separate build configuration for .NET Framework 4.7.2
+  * OpenTelemetry integration upgraded to target OpenTelemetry 1.0.0-rc1.1
+  * Ported JobInterruptMonitorPlugin from Java version which allows automatic interrupt calls for registered jobs (#1110)
+  * Rewrite semaphore implementations (#1115)
+  * UsingJobData now has Guid and char overloads (#1141)
+  * Add a regular AddJob Type (#1090)
+  
+* FIXES
+
+  * Jobs not firing after upgrade to 3.2.x (from 3.0.7) on Microsoft Server 2008 R2 (#1083)
+  * Jobs are not fired (#1072)
+  * MicrosoftDependencyInjectionJobFactory does not inject job properties for scoped jobs (#1106)
+  * XSD schema no longer requires defining durable element if you just want to define recover (#1128)
+  * Stack trace logging fixed in case of reporting invalid lock acquire (#1133)
+  * Disposable job is disposed twice when using UseMicrosoftDependencyInjectionScopedJobFactory (#1120)
+  * QuartzHostedService.StopAsync throws NullReferenceException if StartAsync hasn't been run (#1123)
+
+
+## Release 3.2.4, Jan 19 2021
+
+This release is a maintenance release with couple of bug fixes. The most important fix for this release is that
+now Quartz distinguishes between external code task cancellation (say HttpClient) and job cancellation triggered by using
+the Quartz API's Interrupt method. Earlier Quartz incorrectly considered also other TaskCanceledExceptions as clean instead of being errors.
+
+* FIXES
+
+  * JobRunShell silently handles OperationCanceledException which is not correct in terms of job retry handling (#1064)
+  * Handled exceptions thrown while retrieving the misfired trigger (#1040)
+  * FileScanJob is faling after upgrading from 3.0.7 to 3.2.3 (#1027)
+  * JobBuilder.UsingJobData(string key, string value) should be JobBuilder.UsingJobData(string key, string? value) (#1025)
+
+
+## Release 3.2.3, Oct 31 2020
+
+This release addresses issue with Autofac integration and adds new integration package Quartz.OpenTracing to allow
+integration with OpenTracing.
+
+* NEW FEATURE
+
+  * Add Quartz.OpenTracing support (#1006)
+
+* FIXES
+
+  * Xamarin Android can't get scheduler (#1008)
+  * Autofac job factory registration fails (#1011)
+
+
+## Release 3.2.2, Oct 19 2020
+
+This release addresses regression in scoped job resolution which was introduced by job factory refactoring done in 3.2.1.
+
+* FIXES
+
+  * Fix scoped job resolution (#998)
+
+## Release 3.2.1, Oct 18 2020
+
+This is a maintenance release containing mostly bug fixes.
+
+MS dependency injection job factory configuration was unified and you can now configure relevant options 
+like whether to create a separate scope with using just the UseMicrosoftDependencyInjectionJobFactory and its callback.
+Now scoped jobs also get their properties set from job data map.
+
+Pre-configuring Quartz options from appsettings.json with services.Configure<QuartzOptions>(Configuration.GetSection("Quartz"));
+now also works as expected.
+
+* FIXES
+
+  * Make QuartzOptions Triggers and JobDetails public (#981)
+  * Fix configuration system injection for dictionary/quartz.jobStore.misfireThreshold in DI (#983)
+  * XMLSchedulingDataProcessor can cause IOException due to file locking (#993)
+  
+* IMPROVEMENTS
+  
+  * Unify MS dependency injection job factory logic and configuration (#995)
+  * Improve job dispatch performance to reduce latency before hitting Execute (RAMJobStore) (#996)
+
+## Release 3.2.0, Oct 1 2020
+
+This is a release that focuses on restructuring some packages that warrants for a minor version number increment.
+
+Now Quartz no longer has hard dependency on Microsoft.Data.SqlClient, you need to add that dependency to your project
+if you are using Microsoft SQL Server as backing store for your project. Now requirement is in line with other providers/drivers.
+
+There's also important fix for SQL Server where varying text parameter sizes caused query plan pollution.
+
+* BREAKING CHANGES
+
+    * Remove dependency on Microsoft.Data.SqlClient (#912)
+    * LogContext moved from Quartz namespace to Quartz.Logging namespace (#915)
+    * For Full Framework, System.Data.SqlClient is again the default provider, Microsoft.Data can be used via provider MicrosoftDataSqlClient (#916)
+
+* FIXES
+
+    * Revert change in 3.1: CronExpression/cron trigger throwing NotImplementedException when calculating final fire time (#905)
+    * Use 2.1 as the minimum version for the .NET Platform Extensions (#923)
+    * ServiceCollection.AddQuartz() should register default ITypeLoadHelper if none supplied (#924)
+    * SqlServer AdoJobStore SqlParameter without text size generates pressure on server (#939)
+    * DbProvider initialization logic should also read quartz.config (#951)
+    * LoggingJobHistoryPlugin and LoggingTriggerHistoryPlugin names are null with IoC configuration (#926)
+    * Improve options pattern to allow better custom configuration story (#955)
+
+* NEW FEATURE 
+ 
+    * Introduce separate Quartz.Extensions.Hosting (#911)
+    * You can now schedule job and trigger in MS DI integration with single .ScheduleJob call (#943)
+    * Support adding calendars to MS DI via AddCalendar<T> (#945)
+
+## Release 3.1.0, Jul 24 2020
+
+This release concentrates on performance and bringing support to de facto Microsoft libraries like dependency injection and ASP.NET Core hosting.
+A big change is that now SQL queries use parametrized scheduler name, which allows database server to reuse query plans and use indexes more optimally.
+This will help especially clusters which have large number of nodes. The SQL server indexes were also revisited and their amount reduced by using smarter covering indexes.
+
+There is also a very important bug fix present for lock handling on retries. There was a possibility for a deadlock in database lock handling in some situations.
+
+* BREAKING CHANGES
+
+    * minimum supported .NET Full Framework is now 4.6.1
+    * changed SQL commands format in `Quartz.Impl.AdoJobStore.JobStoreSupport` (see also [#818](https://github.com/quartznet/quartznet/pull/818)). Affected are only schedulers that use customized configurations of SQL commands in `Quartz.Impl.AdoJobStore.JobStoreSupport`, e.g. `SelectWithLockSQL`. Migration example:
+```xml
+<!-- Quartz <=3.0.7 -->
+<item key="quartz.jobStore.selectWithLockSQL">SELECT * FROM {0}LOCKS WITH (UPDLOCK,ROWLOCK) WHERE SCHED_NAME = {1} AND LOCK_NAME = @lockName</item>
+<!-- Quartz >=3.1.0 -->
+<item key="quartz.jobStore.selectWithLockSQL">SELECT * FROM {0}LOCKS WITH (UPDLOCK,ROWLOCK) WHERE SCHED_NAME = @schedulerName AND LOCK_NAME = @lockName</item>
+```
+
+* NEW FEATURE
+
+    * Microsoft DI integration via package Quartz.Extensions.DependencyInjection (also allows bridging to Microsoft Logging)
+    * DI configuration now supports adding scheduler, job and trigger listeners (#877)
+    * DI configuration now processes appsettings.json section "Quartz" looking for key value pairs (#877)
+    * Add diagnostics source and OpenTelemetry support (#901)
+    * Use Microsoft.Data.SqlClient as SQL Server connection library (#839)
+    * ASP.NET Core / Hosting integration and health checks via revisited NuGet package Quartz.AspNetCore (thank you zlzforever for contributing the work)
+    * Introduced a config parameter `ClusterCheckinMisfireThreshold` (#692)
+    * Giving meaningful names to examples folders (#701)
+    * Added search patterns/sub directory search to directory scanner job (#411, #708)
+    * Fluent interface for scheduler configuration (#791)
+    * Support every nth week in cron expression (#790)
+    * Enable SQLite job store provider for NetStandard (#802)
+    * Add configurable params for StdRowLockSemaphore for Failure obtaining db row lock
+    * SchedName added to queries as sql parameter (#818)
+    * Server, example and test projects upgraded to user .NET Core 3.1
+    * Nullable reference type annotations have been enabled
+    * Symbols are now provided as a separate NuGet symbol package (snupkg)
+    * SQL Server indexes have been fine-tuned, redundancies were removed and you can follow the current scripts to update to latest version of them
+    * Upgrade MySqlConnector to 1.0 (namespace has changed) (#890)
+    * Support Microsoft.Extensions.Logging.Abstractions (#756)
+    * Support Microsoft.Data.SQLite with full framework (#893)
+    * Support custom calendar JSON serialization (#697)
+    * DI configuration now supports adding scheduler, job and trigger listeners (#877)
+    * DI configuration now processes appsettings.json section "Quartz" looking for key value pairs (#877)
+    * Use Microsoft.Data.SqlClient as SQL Server connection library (#839)    
+    
+* FIXES
+
+    * Allow binary serialization for DirectoryScanJob data (#658)
+    * LibLog - Fixed NLog + Log4net callsite. Added support for NLog structured logging. Optimized Log4net-logger (#705)
+    * Upgrade LibLog to latest version (#749)
+    * RAMJobStore performance improvements (#718, #719, #720)
+    * General performance improvements (#725, #723, #727)
+    * GetTimeBefore() and GetFinalFireTime() should throw NotImplementedException instead of returning null (#731)
+    * Switch to official TimeZoneConverter NuGet package (#739)
+    * Remove invalid TimeSpanParseRule.Days (#782)
+    * Update tables_sqlServer.sql to follow current SQL syntax and structures (#787)
+    * Fix China Standard Time mapping in TimeZoneUtil.cs (#765)
+    * Release BLOCKED triggers in ReleaseAcquiredTrigger (#741 #800)
+    * DailyTimeIntervalTrigger failed to set endingDailyAfterCount = 1
+    * CronTrigger: cover all valid misfire policies, and provide a sensible default and logging when seeing an invalid one
+    * Remove internal dependencies from examples (#742)
+    * Properly assign MaxConcurrency in CreateVolatileScheduler (#726) 
+    * Fix potential scheduler deadlock caused by changed lock request id inside ExecuteInNonManagedTXLock (#794)
+    * Ensure NuGet.exe is part of produced zip to ensure build works (#881)
+    * JobDataMap with enum values persisted as JSON can now be set back to job members via PropertySettingJobFactory (#770)
+    * Ensure GetScheduleBuilder for triggers respects IgnoreMisfirePolicy (#750)  
+    * Remove cron expression validation from XML schema and rely on CronExpression itself (#729)
+          
+
+## Release 3.1.0 beta 3, Jul 21 2020
+
+* NEW FEATURES
+
+    * Upgrade MySqlConnector to 1.0 (namespace has changed) (#890)
+    * Support Microsoft.Extensions.Logging.Abstractions (#756)
+    * Support Microsoft.Data.SQLite with full framework (#893)
+    * Support custom calendar JSON serialization (#697)
+
+* FIXES
+
+    * Remove internal dependencies from examples (#742)
+    * Properly assign MaxConcurrency in CreateVolatileScheduler (#726) 
+
+
+## Release 3.1.0 beta 2, Jul 14 2020
+
+On the road for 3.1 release, also note beta 1 remarks.
+
+* NEW FEATURES
+
+    * DI configuration now supports adding scheduler, job and trigger listeners (#877)
+    * DI configuration now processes appsettings.json section "Quartz" looking for key value pairs (#877)
+    * Use Microsoft.Data.SqlClient as SQL Server connection library (#839)
+    
+* FIXES
+
+    * Fix potential scheduler deadlock caused by changed lock request id inside ExecuteInNonManagedTXLock (#794)
+    * Ensure NuGet.exe is part of produced zip to ensure build works (#881)
+    * JobDataMap with enum values persisted as JSON can now be set back to job members via PropertySettingJobFactory (#770)
+    * Ensure GetScheduleBuilder for triggers respects IgnoreMisfirePolicy (#750)  
+    * Remove cron expression validation from XML schema and rely on CronExpression itself (#729)  
+
+## Release 3.1.0 beta 1, Jul 8 2020
+
+This release concentrates on performance and bringing support to de facto Microsoft libraries like dependency injection and ASP.NET Core hosting.
+A big change is that now SQL queries use parametrized scheduler name, which allows database server to reuse query plans and use indexes more optimally.
+This will help especially clusters which have large number of nodes. The SQL server indexes were also revisited and their amount reduced by using smarter covering indexes.
+
+There are also some minor bug fixes present.
+
+* BREAKING CHANGES
+
+     * minimum supported .NET Full Framework is now 4.6.1
+
+* NEW FEATURE
+
+    * Microsoft DI integration via package Quartz.Extensions.DependencyInjection (also allows briding to Microsoft Logging)
+    * ASP.NET Core / Hosting integration and health checks via revisited NuGet package Quartz.AspNetCore (thank you zlzforever for contributing the work)
+    * Introduced a config parameter `ClusterCheckinMisfireThreshold` (#692)
+    * Giving meaningful names to examples folders (#701)
+    * Added search patterns/sub directory search to directoty scanner job (#411, #708)
+    * Fluent interface for scheduler configuration (#791)
+    * Support every nth week in cron expression (#790)
+    * Enable SQLite job store provider for NetStandard (#802)
+    * Add configurable params for StdRowLockSemaphore for Failure obtaining db row lock
+    * SchedName added to queries as sql paramteter (#818)
+    * Server, example and test projects upgraded to user .NET Core 3.1
+    * Nullable reference type annotations have been enabled
+    * Symbols are now provided as a separate NuGet symbol package (snupkg)
+    * SQL Server indexes have been fine-tuned, redudancies were removed and you can follow the current scripts to update to latest version of them
+
+* FIXES
+
+    * Allow binary serialization for DirectoryScanJob data (#658)
+    * LibLog - Fixed NLog + Log4net callsite. Added support for NLog structured logging. Optimized Log4net-logger (#705)
+    * Upgrade LibLog to latest version (#749)
+    * RAMJobStore performance improvements (#718, #719, #720)
+    * General performance improvements (#725, #723, #727)
+    * GetTimeBefore() and GetFinalFireTime() should throw NotImplementedException instead of returning null (#731)
+    * Switch to official TimeZoneConverter NuGet package (#739)
+    * Remove invalid TimeSpanParseRule.Days (#782)
+    * Update tables_sqlServer.sql to follow current SQL syntax and structures (#787)
+    * Fix China Standard Time mapping in TimeZoneUtil.cs (#765)
+    * Release BLOCKED triggers in ReleaseAcquiredTrigger (#741 #800)
+    * DailyTimeIntervalTrigger failed to set endingDailyAfterCount = 1
+    * CronTrigger: cover all valid misfire policies, and provide a sensible default and logging when seeing an invalid one
+    
+
+## Release 3.0.7, Oct 7 2018
 
 This release brings .NET Core 2.1 version of example server and adds new plugin 
 Quartz.Plugins.TimeZoneConverter which allows usage of TimeZoneConverter library
-(https://github.com/mj1856/TimeZoneConverter) to get consisten time zone id parsing between
+(https://github.com/mj1856/TimeZoneConverter) to get consistent time zone id parsing between
 Linux and Windows.
+
+There are also some bug fixes related to AdoJobStore.
 
 * NEW FEATURE
 
     * Add .NET Core 2.1 version of example server (#682)
-	* New plugin Quartz.Plugins.TimeZoneConverter which allows usage of TimeZoneConverter library
+    * New plugin Quartz.Plugins.TimeZoneConverter which allows usage of TimeZoneConverter library (#647)
 
 * FIXES
 
     * Added transient codes from EF into new JobStore (#681)
-	* Parametrized queries produced by ReplaceTablePrefix should be cached (#651)
-	* Use TypeNameHandling.Auto for JsonObjectSerializer (#621)
+    * Parametrized queries produced by ReplaceTablePrefix should be cached (#651)
+    * Use TypeNameHandling.Auto for JsonObjectSerializer (#621)
+    * Fix a race condition that could cause duplicate trigger firings (#690)
+    * ISchedulerListener.JobScheduled not called when scheduling multiple jobs (ScheduleJobs) (#678)
 
 
 ## Release 3.0.6, Jul 6 2018
@@ -53,9 +357,9 @@ This release fixes couple bugs and adds support for .NET Core version of Oracle'
 
 * FIXES
 
-	* trigger loop encountered using DailyTimeIntervalTrigger across DST start boundary (#610)
-	* Missing ConfigureAwait(false) in some parts of code (#618)
-	
+    * trigger loop encountered using DailyTimeIntervalTrigger across DST start boundary (#610)
+    * Missing ConfigureAwait(false) in some parts of code (#618)
+    
 
 ## Release 3.0.4, Mar 4 2018
 
@@ -64,28 +368,28 @@ its CancellationTokenSource with calls it makes. Everyone using 3.x is advised t
 
 * FIXES
 
-	* Memory leak caused by CancellationTokenSource sharing (#600)
-	* tables_oracle.sql should use NUMBER(19) instead of NUMBER(13) for long properties (#598)
+    * Memory leak caused by CancellationTokenSource sharing (#600)
+    * tables_oracle.sql should use NUMBER(19) instead of NUMBER(13) for long properties (#598)
 
 
 ## Release 3.0.3, Feb 24 2018
 
 * FIXES
 
-	* XML scheduling no longer requires write access to source XML file (#591)
-	* Improve listener error handling (#589)
-	* SQL command parameters are not defined in 'IsTriggerStillPresent' method (#579)
-	* Source distribution couldn't be built with build.cmd/.sh when no .git directory present (#596)
+    * XML scheduling no longer requires write access to source XML file (#591)
+    * Improve listener error handling (#589)
+    * SQL command parameters are not defined in 'IsTriggerStillPresent' method (#579)
+    * Source distribution couldn't be built with build.cmd/.sh when no .git directory present (#596)
     * Currently executing jobs cannot be retrieved via remoting (#580)
-	
-	
+    
+    
 ## Release 3.0.2, Jan 25 2018
 
 This is a minor fix release that fixes single issue that still prevented full usage of remoting.
 
 * FIXES
 
-	* Mark ReadOnlyCompatibleHashSet as serializable (#576)
+    * Mark HashSet as serializable (#576)
 
 
 ## Release 3.0.1, Jan 21 2018
@@ -97,8 +401,8 @@ through .NET Remoting infrastructure. Now zip packing is also back and includes 
 * FIXES
 
     * Create zip package as part of release, including Quartz.Server (#572)
-	* A specific CronExpression fails with "Input string was not in a correct format." (#568)
-	* Cannot use remoting due to Task and CancellationToken signatures (#571)
+    * A specific CronExpression fails with "Input string was not in a correct format." (#568)
+    * Cannot use remoting due to Task and CancellationToken signatures (#571)
 
 
 ## Release 3.0, Dec 30 2017
@@ -116,8 +420,8 @@ See 3.x releases for full list.
     * returned .NET Framework 4.5.2 compatibility to better support library consumers like NServiceBus and MassTransit
     * netstandard 2.0 is now minimum for .NET Core
     * support for Microsoft.Data.Sqlite via provider name SQLite-Microsoft, the old provider SQLite also still works
-	* Firebird is supported in .NET Core
-	* Added preliminary support for SQL Server Memory-Optimized tables and Quartz.Impl.AdoJobStore.UpdateLockRowSemaphoreMOT
+    * Firebird is supported in .NET Core
+    * Added preliminary support for SQL Server Memory-Optimized tables and Quartz.Impl.AdoJobStore.UpdateLockRowSemaphoreMOT
 
 * BREAKING CHANGES
 
@@ -532,10 +836,10 @@ This release contains some bug fixes and some compile time breaking changes.
 
     * DailyTimeIntervalTriggerPersistenceDelegate does not store weekdays in correct format
     * DisallowConcurrentExecution decorated triggers not being updated after TriggerCompleted
-	* DailyTimeIntervalTrigger does not work as expected
+    * DailyTimeIntervalTrigger does not work as expected
 
 * Improvement
-	* ADO.NET job store: force UTC ticks when storing datetimes
+    * ADO.NET job store: force UTC ticks when storing datetimes
 
 # Release 2.0 beta 1, October 2, 2011
 
@@ -665,9 +969,9 @@ This release contains some bug fixes and some compile time breaking changes.
     * [QRTZNET-114] - Express intervals and durations using TimeSpan instead of ints and longs
 
 * Breaking changes:
-	* Public API has changed with the introduction of TimeSpan usage,
-	  changes should show only as compile time errors and should be easily
-	  fixable.
+    * Public API has changed with the introduction of TimeSpan usage,
+      changes should show only as compile time errors and should be easily
+      fixable.
 
 ## Release 1.0 RC 1, July 28, 2008
 

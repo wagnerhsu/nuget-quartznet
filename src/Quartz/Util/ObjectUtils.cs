@@ -20,6 +20,7 @@
 #endregion
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Globalization;
@@ -43,7 +44,7 @@ namespace Quartz.Util
         /// The <see cref="System.Type"/> we must convert to.
         /// </param>
         /// <returns>The new value, possibly the result of type conversion.</returns>
-        public static object ConvertValueIfNecessary(Type requiredType, object newValue)
+        public static object? ConvertValueIfNecessary(Type requiredType, object? newValue)
         {
             if (newValue != null)
             {
@@ -66,18 +67,29 @@ namespace Quartz.Util
                 }
                 if (requiredType == typeof(Type))
                 {
-                    return Type.GetType(newValue.ToString(), true);
+                    return Type.GetType(newValue.ToString()!, true);
                 }
                 if (newValue.GetType().GetTypeInfo().IsEnum)
                 {
                     // If we couldn't convert the type, but it's an enum type, try convert it as an int
-                    return ConvertValueIfNecessary(requiredType,
-                        Convert.ChangeType(newValue, Convert.GetTypeCode(newValue), null));
+                    return ConvertValueIfNecessary(requiredType, Convert.ChangeType(newValue, Convert.GetTypeCode(newValue), null));
                 }
 
-                throw new NotSupportedException(newValue + " is no a supported value for a target of type " +
-                                                requiredType);
+                if (requiredType.IsEnum)
+                {
+                    // if JSON serializer creates numbers from enums, be prepared for that
+                    try
+                    {
+                        return Enum.ToObject(requiredType, newValue);
+                    }
+                    catch
+                    {
+                    }
+                }
+
+                throw new NotSupportedException($"{newValue} is no a supported value for a target of type {requiredType}");
             }
+
             if (requiredType.GetTypeInfo().IsValueType)
             {
                 return Activator.CreateInstance(requiredType);
@@ -91,19 +103,19 @@ namespace Quartz.Util
         /// <summary>
         /// Instantiates an instance of the type specified.
         /// </summary>
-        /// <returns></returns>
-        public static T InstantiateType<T>(Type type)
+        public static T InstantiateType<T>(Type? type)
         {
             if (type == null)
             {
-                throw new ArgumentNullException(nameof(type), "Cannot instantiate null");
+                ExceptionHelper.ThrowArgumentNullException(nameof(type), "Cannot instantiate null");
             }
-            ConstructorInfo ci = type.GetConstructor(Type.EmptyTypes);
+            
+            var ci = type.GetConstructor(Type.EmptyTypes);
             if (ci == null)
             {
-                throw new ArgumentException("Cannot instantiate type which has no empty constructor", type.Name);
+                ExceptionHelper.ThrowArgumentException("Cannot instantiate type which has no empty constructor", type.Name);
             }
-            return (T) ci.Invoke(new object[0]);
+            return (T) ci.Invoke(Array.Empty<object>());
         }
 
         /// <summary>
@@ -114,12 +126,9 @@ namespace Quartz.Util
             for (int i = 0; i < propertyNames.Length; i++)
             {
                 string name = propertyNames[i];
-                string propertyName = CultureInfo.InvariantCulture.TextInfo.ToUpper(name.Substring(0, 1)) +
-                                      name.Substring(1);
-
                 try
                 {
-                    SetPropertyValue(obj, propertyName, propertyValues[i]);
+                    SetPropertyValue(obj, name, propertyValues[i]);
                 }
                 catch (Exception nfe)
                 {
@@ -141,13 +150,10 @@ namespace Quartz.Util
 
             foreach (string name in props.Keys)
             {
-                string propertyName = CultureInfo.InvariantCulture.TextInfo.ToUpper(name.Substring(0, 1)) +
-                                      name.Substring(1);
-
                 try
                 {
-                    object value = props[name];
-                    SetPropertyValue(obj, propertyName, value);
+                    var value = props[name];
+                    SetPropertyValue(obj, name, value);
                 }
                 catch (Exception nfe)
                 {
@@ -157,25 +163,35 @@ namespace Quartz.Util
             }
         }
 
-        public static void SetPropertyValue(object target, string propertyName, object value)
+        private static readonly ConcurrentDictionary<(Type ObjectType, string PropertyName), PropertyInfo?> propertyResolutionCache = new ();
+        
+        public static void SetPropertyValue(object target, string propertyName, object? value)
         {
-            Type t = target.GetType();
-
-            PropertyInfo pi = t.GetProperty(propertyName);
-
-            if (pi == null || !pi.CanWrite)
+            var pi = propertyResolutionCache.GetOrAdd((target.GetType(), propertyName), tuple =>
             {
-                // try to find from interfaces
-                foreach (var interfaceType in target.GetType().GetInterfaces())
+                string name = char.IsLower(tuple.PropertyName[0])
+                    ? char.ToUpper(tuple.PropertyName[0]) + tuple.PropertyName.Substring(1)
+                    : tuple.PropertyName;
+
+                Type t = tuple.ObjectType;
+                var propertyInfo = t.GetProperty(name);
+
+                if (propertyInfo == null || !propertyInfo.CanWrite)
                 {
-                    pi = interfaceType.GetProperty(propertyName);
-                    if (pi != null && pi.CanWrite)
+                    // try to find from interfaces
+                    foreach (var interfaceType in target.GetType().GetInterfaces())
                     {
-                        // found suitable
-                        break;
+                        propertyInfo = interfaceType.GetProperty(name);
+                        if (propertyInfo != null && propertyInfo.CanWrite)
+                        {
+                            // found suitable
+                            break;
+                        }
                     }
                 }
-            }
+
+                return propertyInfo;
+            });
 
             if (pi == null)
             {
@@ -183,7 +199,7 @@ namespace Quartz.Util
                 throw new MemberAccessException($"No writable property '{propertyName}' found");
             }
 
-            MethodInfo mi = pi.GetSetMethod();
+            var mi = pi.GetSetMethod();
 
             if (mi == null)
             {
@@ -203,13 +219,13 @@ namespace Quartz.Util
             mi.Invoke(target, new[] {value});
         }
 
-        public static TimeSpan GetTimeSpanValueForProperty(PropertyInfo pi, object value)
+        public static TimeSpan GetTimeSpanValueForProperty(PropertyInfo pi, object? value)
         {
             object[] attributes = pi.GetCustomAttributes(typeof(TimeSpanParseRuleAttribute), false).ToArray();
 
             if (attributes.Length == 0)
             {
-                return (TimeSpan) ConvertValueIfNecessary(typeof(TimeSpan), value);
+                return (TimeSpan) ConvertValueIfNecessary(typeof(TimeSpan), value)!;
             }
 
             TimeSpanParseRuleAttribute attribute = (TimeSpanParseRuleAttribute) attributes[0];

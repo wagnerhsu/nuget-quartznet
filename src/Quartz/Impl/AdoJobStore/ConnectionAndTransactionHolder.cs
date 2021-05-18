@@ -38,18 +38,22 @@ namespace Quartz.Impl.AdoJobStore
         private DateTimeOffset? sigChangeForTxCompletion;
 
         private readonly DbConnection connection;
-        private DbTransaction transaction;
+        private DbTransaction? transaction;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="ConnectionAndTransactionHolder"/> class.
         /// </summary>
         /// <param name="connection">The connection.</param>
         /// <param name="transaction">The transaction.</param>
-        public ConnectionAndTransactionHolder(DbConnection connection, DbTransaction transaction)
+        public ConnectionAndTransactionHolder(DbConnection connection, DbTransaction? transaction)
         {
             this.connection = connection;
             this.transaction = transaction;
         }
+
+        public DbConnection Connection => connection;
+
+        public DbTransaction? Transaction => transaction;
 
         public void Attach(DbCommand cmd)
         {
@@ -81,18 +85,15 @@ namespace Quartz.Impl.AdoJobStore
 
         public void Close()
         {
-            if (connection != null)
+            try
             {
-                try
-                {
-                    connection.Close();
-                }
-                catch (Exception e)
-                {
-                    log.ErrorException(
-                        "Unexpected exception closing Connection." +
-                        "  This is often due to a Connection being returned after or during shutdown.", e);
-                }
+                connection.Close();
+            }
+            catch (Exception e)
+            {
+                log.ErrorException(
+                    "Unexpected exception closing Connection." +
+                    "  This is often due to a Connection being returned after or during shutdown.", e);
             }
         }
 

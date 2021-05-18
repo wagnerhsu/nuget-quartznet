@@ -67,14 +67,21 @@ namespace Quartz
         /// <summary>
         /// Create an empty <see cref="JobDataMap" />.
         /// </summary>
-        public JobDataMap() : base(15)
+        public JobDataMap() : this(0)
+        {
+        }
+
+        /// <summary>
+        /// Create <see cref="JobDataMap" /> with initial capacity.
+        /// </summary>
+        public JobDataMap(int initialCapacity) : base(initialCapacity)
         {
         }
 
         /// <summary>
         /// Create a <see cref="JobDataMap" /> with the given data.
         /// </summary>
-        public JobDataMap(IDictionary<string, object> map) : this()
+        public JobDataMap(IDictionary<string, object> map) : this(map.Count)
         {
             PutAll(map);
 
@@ -86,11 +93,13 @@ namespace Quartz
         /// <summary>
         /// Create a <see cref="JobDataMap" /> with the given data.
         /// </summary>
-        public JobDataMap(IDictionary map) : this()
+        public JobDataMap(IDictionary map) : this(map.Count)
         {
+#pragma warning disable 8605
             foreach (DictionaryEntry entry in map)
+#pragma warning restore 8605
             {
-                Put((string) entry.Key, entry.Value);
+                Put((string) entry.Key, entry.Value!);
             }
 
             // When constructing a new data map from another existing map, we should NOT mark dirty flag as true
@@ -195,6 +204,26 @@ namespace Quartz
         {
             string strValue = value.ToString();
             Put(key, strValue);
+        }
+
+        /// <summary>
+        /// Adds the given <see cref="Guid" /> value as a string version to the
+        /// <see cref="IJob" />'s data map. The hyphens are omitted from the  <see cref="Guid" />.
+        /// </summary>
+        public virtual void PutAsString(string key, Guid value)
+        {
+            string strValue = value.ToString("N");
+            Put(key, strValue);
+        }
+
+        /// <summary>
+        /// Adds the given <see cref="Guid" /> value as a string version to the
+        /// <see cref="IJob" />'s data map. The hyphens are omitted from the  <see cref="Guid" />.
+        /// </summary>
+        public virtual void PutAsString(string key, Guid? value)
+        {
+            string? strValue = value?.ToString("N");
+            Put(key, strValue!);
         }
 
         /// <summary>
@@ -403,6 +432,45 @@ namespace Quartz
             }
 
             return GetTimeSpan(key);
+        }
+
+        /// <summary>
+        /// Retrieve the identified <see cref="Guid" /> value from the <see cref="JobDataMap" />.
+        /// </summary>
+        public virtual Guid GetGuidValueFromString(string key)
+        {
+            object obj = Get(key);
+            return Guid.Parse((string)obj);
+        }
+
+        /// <summary>
+        /// Retrieve the identified <see cref="Guid" /> value from the <see cref="JobDataMap" />.
+        /// </summary>
+        public virtual Guid GetGuidValue(string key)
+        {
+            object obj = Get(key);
+
+            if (obj is string)
+            {
+                return GetGuidValueFromString(key);
+            }
+
+            return GetGuid(key);
+        }
+
+        /// <summary>
+        /// Retrieve the identified <see cref="Guid" /> value from the <see cref="JobDataMap" />.
+        /// </summary>
+        public virtual Guid? GetNullableGuidValue(string key)
+        {
+            object obj = Get(key);
+
+            if (obj is string)
+            {
+                return (obj == null || ((string)obj).Length == 0) ? (Guid?)null : GetGuidValueFromString(key);
+            }
+
+            return GetNullableGuid(key);
         }
     }
 }
