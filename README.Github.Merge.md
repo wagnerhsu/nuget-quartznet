@@ -1,0 +1,1 @@
+- https://github.com/wagnerhsu/nuget-quartznet/compare/master...quartznet:main
