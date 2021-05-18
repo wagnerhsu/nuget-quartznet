@@ -1,4 +1,4 @@
-#region License
+﻿#region License
 
 /*
  * All content copyright Marko Lahma, unless otherwise indicated. All rights reserved.
@@ -20,10 +20,9 @@
 #endregion
 
 using System;
-using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
-
 using Quartz.Impl.AdoJobStore.Common;
 using Quartz.Logging;
 using Quartz.Util;
@@ -38,18 +37,17 @@ namespace Quartz.Impl.AdoJobStore
     /// <author>Marko Lahma (.NET)</author>
     public abstract class DBSemaphore : StdAdoConstants, ISemaphore, ITablePrefixAware
     {
-        private readonly object syncRoot = new object();
-        private readonly Dictionary<Guid, HashSet<string>> locks = new Dictionary<Guid, HashSet<string>>();
+        private readonly ConcurrentDictionary<ThreadLockKey, object?> locks = new();
 
-        private string sql;
-        private string insertSql;
+        private string sql = null!;
+        private string insertSql = null!;
 
-        private string tablePrefix;
+        private string tablePrefix = null!;
 
-        private string schedName;
+        private string? schedName;
 
-        private string expandedSQL;
-        private string expandedInsertSQL;
+        private string expandedSQL = null!;
+        private string expandedInsertSQL = null!;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="DBSemaphore"/> class.
@@ -60,10 +58,10 @@ namespace Quartz.Impl.AdoJobStore
         /// <param name="defaultSQL">The default SQL.</param>
         /// <param name="dbProvider">The db provider.</param>
         protected DBSemaphore(
-            string tablePrefix, 
-            string schedName, 
-            string defaultSQL, 
-            string defaultInsertSQL, 
+            string tablePrefix,
+            string? schedName,
+            string defaultSQL,
+            string defaultInsertSQL,
             IDbProvider dbProvider)
         {
             Log = LogProvider.GetLogger(GetType());
@@ -85,9 +83,9 @@ namespace Quartz.Impl.AdoJobStore
         /// </summary>
         protected abstract Task ExecuteSQL(
             Guid requestorId,
-            ConnectionAndTransactionHolder conn, 
-            string lockName, 
-            string expandedSql, 
+            ConnectionAndTransactionHolder conn,
+            string lockName,
+            string expandedSql,
             string expandedInsertSql,
             CancellationToken cancellationToken);
 
@@ -97,35 +95,31 @@ namespace Quartz.Impl.AdoJobStore
         /// </summary>
         /// <returns>true if the lock was obtained.</returns>
         public async Task<bool> ObtainLock(
-            Guid requestorId, 
-            ConnectionAndTransactionHolder conn,
+            Guid requestorId,
+            ConnectionAndTransactionHolder? conn,
             string lockName,
             CancellationToken cancellationToken = default)
         {
-            if (Log.IsDebugEnabled())
+            var isDebugEnabled = Log.IsDebugEnabled();
+            if (isDebugEnabled)
             {
                 Log.DebugFormat("Lock '{0}' is desired by: {1}", lockName, requestorId);
             }
-            if (!IsLockOwner(requestorId, lockName))
-            {
-                await ExecuteSQL(requestorId, conn, lockName, expandedSQL, expandedInsertSQL, cancellationToken).ConfigureAwait(false);
 
-                if (Log.IsDebugEnabled())
+            var key = new ThreadLockKey(requestorId, lockName);
+            if (!IsLockOwner(key))
+            {
+                await ExecuteSQL(requestorId, conn!, lockName, expandedSQL, expandedInsertSQL, cancellationToken)
+                    .ConfigureAwait(false);
+
+                if (isDebugEnabled)
                 {
                     Log.DebugFormat("Lock '{0}' given to: {1}", lockName, requestorId);
                 }
 
-                lock (syncRoot)
-                {
-                    if (!locks.TryGetValue(requestorId, out var requestorLocks))
-                    {
-                        requestorLocks = new HashSet<string>();
-                        locks[requestorId] = requestorLocks;
-                    }
-                    requestorLocks.Add(lockName);
-                }
+                locks.TryAdd(key, null);
             }
-            else if (Log.IsDebugEnabled())
+            else if (isDebugEnabled)
             {
                 Log.DebugFormat("Lock '{0}' Is already owned by: {1}", lockName, requestorId);
             }
@@ -138,23 +132,15 @@ namespace Quartz.Impl.AdoJobStore
         /// thread.
         /// </summary>
         public Task ReleaseLock(
-            Guid requestorId, 
+            Guid requestorId,
             string lockName,
             CancellationToken cancellationToken = default)
         {
-            if (IsLockOwner(requestorId, lockName))
+            var key = new ThreadLockKey(requestorId, lockName);
+            if (IsLockOwner(key))
             {
-                lock (syncRoot)
-                {
-                    if (locks.TryGetValue(requestorId, out var requestorLocks))
-                    {
-                        requestorLocks.Remove(lockName);
-                        if (requestorLocks.Count == 0)
-                        {
-                            locks.Remove(requestorId);
-                        }
-                    }
-                }
+                locks.TryRemove(key, out _);
+
                 if (Log.IsDebugEnabled())
                 {
                     Log.DebugFormat("Lock '{0}' returned by: {1}", lockName, requestorId);
@@ -162,23 +148,20 @@ namespace Quartz.Impl.AdoJobStore
             }
             else if (Log.IsWarnEnabled())
             {
-                Log.WarnException($"Lock '{lockName}' attempt to return by: {requestorId} -- but not owner!",
-                    new Exception("stack-trace of wrongful returner"));
+                Log.Warn($"Lock '{lockName}' attempt to return by: {requestorId} -- but not owner!");
+                Log.Warn("stack-trace of wrongful returner: " + Environment.StackTrace);
             }
 
-            return TaskUtil.CompletedTask;
+            return Task.CompletedTask;
         }
 
         /// <summary>
         /// Determine whether the calling thread owns a lock on the identified
         /// resource.
         /// </summary>
-        private bool IsLockOwner(Guid requestorId, string lockName)
+        private bool IsLockOwner(in ThreadLockKey key)
         {
-            lock (syncRoot)
-            {
-                return locks.TryGetValue(requestorId, out var requestorLocks) && requestorLocks.Contains(lockName);
-            }
+            return locks.ContainsKey(key);
         }
 
         /// <summary>
@@ -195,6 +178,7 @@ namespace Quartz.Impl.AdoJobStore
                 {
                     sql = value.Trim();
                 }
+
                 SetExpandedSql();
             }
         }
@@ -214,15 +198,16 @@ namespace Quartz.Impl.AdoJobStore
 
         private void SetExpandedSql()
         {
-            if (TablePrefix != null && SchedName != null && sql != null && insertSql != null)
+            if (TablePrefix != null && sql != null && insertSql != null)
             {
-                expandedSQL = AdoJobStoreUtil.ReplaceTablePrefix(sql, TablePrefix, SchedulerNameLiteral);
-                expandedInsertSQL = AdoJobStoreUtil.ReplaceTablePrefix(insertSql, TablePrefix, SchedulerNameLiteral);
+                expandedSQL = AdoJobStoreUtil.ReplaceTablePrefix(sql, TablePrefix);
+                expandedInsertSQL = AdoJobStoreUtil.ReplaceTablePrefix(insertSql, TablePrefix);
             }
         }
 
-        private string schedNameLiteral;
+        private string? schedNameLiteral;
 
+        [Obsolete("SchedName is now a sql parameter")]
         protected string SchedulerNameLiteral
         {
             get
@@ -231,18 +216,15 @@ namespace Quartz.Impl.AdoJobStore
                 {
                     schedNameLiteral = "'" + schedName + "'";
                 }
+
                 return schedNameLiteral;
             }
         }
 
-        public string SchedName
+        public string? SchedName
         {
             get => schedName;
-            set
-            {
-                schedName = value;
-                SetExpandedSql();
-            }
+            set => schedName = value;
         }
 
         /// <summary>
@@ -260,5 +242,26 @@ namespace Quartz.Impl.AdoJobStore
         }
 
         protected AdoUtil AdoUtil { get; }
+
+        private readonly struct ThreadLockKey : IEquatable<ThreadLockKey>
+        {
+            private readonly Guid requestorId;
+            private readonly string lockName;
+            private readonly int hashCode;
+
+            public ThreadLockKey(Guid requestorId, string lockName)
+            {
+                this.requestorId = requestorId;
+                this.lockName = lockName;
+                hashCode = (requestorId.GetHashCode() * 397) ^ lockName.GetHashCode();
+            }
+
+            public bool Equals(ThreadLockKey other) 
+                => requestorId.Equals(other.requestorId) && ReferenceEquals(lockName, other.lockName);
+
+            public override bool Equals(object? obj) => obj is ThreadLockKey other && Equals(other);
+
+            public override int GetHashCode() => hashCode;
+        }
     }
 }

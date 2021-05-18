@@ -1,12 +1,16 @@
 using System;
 using System.Linq;
 
+using FluentAssertions;
+
 using NUnit.Framework;
 
 using Quartz.Impl.Triggers;
 using Quartz.Simpl;
 using Quartz.Spi;
 using Quartz.Util;
+
+using TimeZoneConverter;
 
 namespace Quartz.Tests.Unit
 {
@@ -712,7 +716,7 @@ namespace Quartz.Tests.Unit
         [Test(Description = "https://github.com/quartznet/quartznet/issues/505")]
         public void ShouldRespectTimeZoneForFirstFireTime()
         {
-            var tz = TimeZoneUtil.FindTimeZoneById("E. South America Standard Time");
+            var tz = TZConvert.GetTimeZoneInfo("E. South America Standard Time");
             var dailyTrigger = (IOperableTrigger) TriggerBuilder.Create()
                 .StartAt(new DateTime(2017, 1, 4, 15, 0, 0, DateTimeKind.Utc))
                 .WithCalendarIntervalSchedule(x => x
@@ -722,6 +726,23 @@ namespace Quartz.Tests.Unit
 
             var firstFireTime = TriggerUtils.ComputeFireTimes(dailyTrigger, null, 1).First();
             Assert.That(firstFireTime, Is.EqualTo(new DateTimeOffset(2017, 1, 4, 13, 0, 0, TimeSpan.FromHours(-2))));
+        }
+        
+        [Test]
+        public void TriggerBuilderShouldHandleIgnoreMisfirePolicy()
+        {
+            var trigger1 = TriggerBuilder.Create()
+                .WithCalendarIntervalSchedule(x => x
+                    .WithMisfireHandlingInstructionIgnoreMisfires()
+                )
+                .Build();
+
+            var trigger2 = trigger1
+                .GetTriggerBuilder()
+                .Build();
+            
+            trigger1.MisfireInstruction.Should().Be(MisfireInstruction.IgnoreMisfirePolicy);
+            trigger2.MisfireInstruction.Should().Be(MisfireInstruction.IgnoreMisfirePolicy);
         }
 
         protected override CalendarIntervalTriggerImpl GetTargetObject()

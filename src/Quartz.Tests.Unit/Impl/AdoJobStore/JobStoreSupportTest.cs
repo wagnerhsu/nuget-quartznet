@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Data.Common;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
@@ -12,7 +13,6 @@ using Quartz.Impl.AdoJobStore;
 
 namespace Quartz.Tests.Unit.Impl.AdoJobStore
 {
-    [TestFixture]
     public class JobStoreSupportTest
     {
         private TestJobStoreSupport jobStoreSupport;
@@ -44,7 +44,7 @@ namespace Quartz.Tests.Unit.Impl.AdoJobStore
         {
             protected override ConnectionAndTransactionHolder GetNonManagedTXConnection()
             {
-                return new ConnectionAndTransactionHolder(null, null);
+                return new ConnectionAndTransactionHolder(A.Fake<DbConnection>(), null);
             }
 
             protected override Task<T> ExecuteInLock<T>(

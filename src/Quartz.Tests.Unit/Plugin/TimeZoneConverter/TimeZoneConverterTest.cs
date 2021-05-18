@@ -11,17 +11,17 @@ namespace Quartz.Tests.Unit.Plugin.TimeZoneConverter
     public class TimeZoneConverterTest
     {
         [Test]
+        [Platform("WIN")]
         public async Task ResolveIanaTimeZone()
         {
-            Assert.Throws<TimeZoneNotFoundException>(() => TimeZoneUtil.FindTimeZoneById("Canada/Saskatchewan"));
+            Assert.Throws<TimeZoneNotFoundException>(() => TimeZoneInfo.FindSystemTimeZoneById("Canada/Saskatchewan"));
 
             var plugin = new TimeZoneConverterPlugin();
-            await plugin.Start();
+            await plugin.Initialize("", null);
 
             Assert.That(TimeZoneUtil.FindTimeZoneById("Canada/Saskatchewan"), Is.Not.Null);
-
-            await plugin.Shutdown();
-            Assert.Throws<TimeZoneNotFoundException>(() => TimeZoneUtil.FindTimeZoneById("Canada/Saskatchewan"));
+            
+            TimeZoneUtil.CustomResolver = id => null;
         }
     }
 }

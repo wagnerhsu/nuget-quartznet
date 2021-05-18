@@ -22,12 +22,13 @@
 using System;
 using System.Collections;
 using System.Data.Common;
-using System.Data.SqlClient;
 using System.Runtime.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 
 using FakeItEasy;
+
+using Microsoft.Data.SqlClient;
 
 using NUnit.Framework;
 
@@ -307,7 +308,7 @@ namespace Quartz.Tests.Unit.Impl.AdoJobStore
                 this.testDelegate = testDelegate;
             }
 
-            public override ITriggerPersistenceDelegate FindTriggerPersistenceDelegate(string discriminator)
+            protected override ITriggerPersistenceDelegate FindTriggerPersistenceDelegate(string discriminator)
             {
                 return testDelegate;
             }
