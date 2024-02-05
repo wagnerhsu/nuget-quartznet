@@ -1,28 +1,22 @@
-using System;
-using System.Threading.Tasks;
+namespace Quartz.Examples.Worker;
 
-using Microsoft.Extensions.Logging;
-
-namespace Quartz.Examples.Worker
+public class ExampleJob : IJob, IDisposable
 {
-    public class ExampleJob : IJob, IDisposable
+    private readonly ILogger<ExampleJob> logger;
+
+    public ExampleJob(ILogger<ExampleJob> logger)
     {
-        private readonly ILogger<ExampleJob> logger;
+        this.logger = logger;
+    }
 
-        public ExampleJob(ILogger<ExampleJob> logger)
-        {
-            this.logger = logger;
-        }
+    public async ValueTask Execute(IJobExecutionContext context)
+    {
+        logger.LogInformation("{Job} job executing, triggered by {Trigger}", context.JobDetail.Key, context.Trigger.Key);
+        await Task.Delay(TimeSpan.FromSeconds(1));
+    }
 
-        public async Task Execute(IJobExecutionContext context)
-        {
-            logger.LogInformation(context.JobDetail.Key + " job executing, triggered by " + context.Trigger.Key);
-            await Task.Delay(TimeSpan.FromSeconds(1));
-        }
-
-        public void Dispose()
-        {
-            logger.LogInformation("Example job disposing");
-        }
+    public void Dispose()
+    {
+        logger.LogInformation("Example job disposing");
     }
 }

@@ -1,73 +1,82 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
+// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 
-namespace Quartz.Collections
+namespace Quartz.Collections;
+
+internal sealed class IDictionaryDebugView<K, V> where K : notnull
 {
-    internal sealed class IDictionaryDebugView<K, V> where K :  notnull
+    private readonly IDictionary<K, V> _dict;
+
+    public IDictionaryDebugView(IDictionary<K, V> dictionary)
     {
-        private readonly IDictionary<K, V> _dict;
-
-        public IDictionaryDebugView(IDictionary<K, V> dictionary)
+        if (dictionary is null)
         {
-            _dict = dictionary ?? throw new ArgumentNullException(nameof(dictionary));
+            ThrowHelper.ThrowArgumentNullException(nameof(dictionary));
         }
-
-        [DebuggerBrowsable(DebuggerBrowsableState.RootHidden)]
-        public KeyValuePair<K, V>[] Items
-        {
-            get
-            {
-                KeyValuePair<K, V>[] items = new KeyValuePair<K, V>[_dict.Count];
-                _dict.CopyTo(items, 0);
-                return items;
-            }
-        }
+        _dict = dictionary;
     }
 
-    internal sealed class DictionaryKeyCollectionDebugView<TKey, TValue>
+    [DebuggerBrowsable(DebuggerBrowsableState.RootHidden)]
+    public KeyValuePair<K, V>[] Items
     {
-        private readonly ICollection<TKey> _collection;
-
-        public DictionaryKeyCollectionDebugView(ICollection<TKey> collection)
+        get
         {
-            _collection = collection ?? throw new ArgumentNullException(nameof(collection));
-        }
-
-        [DebuggerBrowsable(DebuggerBrowsableState.RootHidden)]
-        public TKey[] Items
-        {
-            get
-            {
-                TKey[] items = new TKey[_collection.Count];
-                _collection.CopyTo(items, 0);
-                return items;
-            }
+            KeyValuePair<K, V>[] items = new KeyValuePair<K, V>[_dict.Count];
+            _dict.CopyTo(items, 0);
+            return items;
         }
     }
+}
 
-    internal sealed class DictionaryValueCollectionDebugView<TKey, TValue>
+internal sealed class DictionaryKeyCollectionDebugView<TKey, TValue>
+{
+    private readonly ICollection<TKey> _collection;
+
+    public DictionaryKeyCollectionDebugView(ICollection<TKey> collection)
     {
-        private readonly ICollection<TValue> _collection;
-
-        public DictionaryValueCollectionDebugView(ICollection<TValue> collection)
+        if (collection is null)
         {
-            _collection = collection ?? throw new ArgumentNullException(nameof(collection));
+            ThrowHelper.ThrowArgumentNullException(nameof(collection));
         }
+        _collection = collection;
+    }
 
-        [DebuggerBrowsable(DebuggerBrowsableState.RootHidden)]
-        public TValue[] Items
+    [DebuggerBrowsable(DebuggerBrowsableState.RootHidden)]
+    public TKey[] Items
+    {
+        get
         {
-            get
-            {
-                TValue[] items = new TValue[_collection.Count];
-                _collection.CopyTo(items, 0);
-                return items;
-            }
+            TKey[] items = new TKey[_collection.Count];
+            _collection.CopyTo(items, 0);
+            return items;
+        }
+    }
+}
+
+internal sealed class DictionaryValueCollectionDebugView<TKey, TValue>
+{
+    private readonly ICollection<TValue> _collection;
+
+    public DictionaryValueCollectionDebugView(ICollection<TValue> collection)
+    {
+        if (collection is null)
+        {
+            ThrowHelper.ThrowArgumentNullException(nameof(collection));
+        }
+        _collection = collection;
+    }
+
+    [DebuggerBrowsable(DebuggerBrowsableState.RootHidden)]
+    public TValue[] Items
+    {
+        get
+        {
+            TValue[] items = new TValue[_collection.Count];
+            _collection.CopyTo(items, 0);
+            return items;
         }
     }
 }

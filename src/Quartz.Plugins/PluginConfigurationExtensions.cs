@@ -1,80 +1,87 @@
-using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 
 using Quartz.Plugin.Interrupt;
 using Quartz.Plugin.Xml;
 using Quartz.Util;
 
-namespace Quartz
+namespace Quartz;
+
+public static class PluginConfigurationExtensions
 {
-    public static class PluginConfigurationExtensions
+    public static T UseXmlSchedulingConfiguration<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.PublicMethods)] T>(
+        this T configurer,
+        Action<XmlSchedulingOptions> configure) where T : IPropertyConfigurationRoot
     {
-        public static T UseXmlSchedulingConfiguration<T>(
-            this T configurer,
-            Action<XmlSchedulingOptions> configure) where T : IPropertyConfigurationRoot
+        if (configurer is IContainerConfigurationSupport containerConfigurationSupport)
         {
-            configurer.SetProperty("quartz.plugin.xml.type", typeof(XMLSchedulingDataProcessorPlugin).AssemblyQualifiedNameWithoutVersion());
-            configure.Invoke(new XmlSchedulingOptions(configurer));
-            return configurer;
+            containerConfigurationSupport.RegisterSingleton<XMLSchedulingDataProcessorPlugin, XMLSchedulingDataProcessorPlugin>();
         }
-
-        /// <summary>
-        /// Configures <see cref="JobInterruptMonitorPlugin "/> into use.
-        /// </summary>
-        public static T UseJobAutoInterrupt<T>(
-            this T configurer,
-            Action<JobAutoInterruptOptions>? configure = null) where T : IPropertyConfigurationRoot
-        {
-            configurer.SetProperty("quartz.plugin.jobAutoInterrupt.type", typeof(JobInterruptMonitorPlugin).AssemblyQualifiedNameWithoutVersion());
-            configure?.Invoke(new JobAutoInterruptOptions(configurer));
-            return configurer;
-        }
-        
+        configurer.SetProperty("quartz.plugin.xml.type", typeof(XMLSchedulingDataProcessorPlugin).AssemblyQualifiedNameWithoutVersion());
+        configure.Invoke(new XmlSchedulingOptions(configurer));
+        return configurer;
     }
 
-    public class JobAutoInterruptOptions : PropertiesSetter
+    /// <summary>
+    /// Configures <see cref="JobInterruptMonitorPlugin "/> into use.
+    /// </summary>
+    public static T UseJobAutoInterrupt<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.PublicMethods)] T>(
+        this T configurer,
+        Action<JobAutoInterruptOptions>? configure = null) where T : IPropertyConfigurationRoot
     {
-        public JobAutoInterruptOptions(IPropertySetter parent) : base(parent, "quartz.plugin.jobAutoInterrupt")
+        if (configurer is IContainerConfigurationSupport containerConfigurationSupport)
         {
+            containerConfigurationSupport.RegisterSingleton<JobInterruptMonitorPlugin, JobInterruptMonitorPlugin>();
         }
-
-        /// <summary>
-        /// The amount of time the job is allowed to run before job interruption is signaled.
-        /// Defaults to 5 minutes.
-        /// </summary>
-        /// <remarks>
-        /// Per-job value can be configured via JobDataMap via key <see cref="JobInterruptMonitorPlugin.JobDataMapKeyMaxRunTime"/>.
-        /// </remarks>
-        public TimeSpan DefaultMaxRunTime
-        {
-            set => SetProperty("defaultMaxRunTime", value.TotalMilliseconds.ToString(CultureInfo.InvariantCulture));
-        }
+        configurer.SetProperty("quartz.plugin.jobAutoInterrupt.type", typeof(JobInterruptMonitorPlugin).AssemblyQualifiedNameWithoutVersion());
+        configure?.Invoke(new JobAutoInterruptOptions(configurer));
+        return configurer;
     }
 
-    public class XmlSchedulingOptions : PropertiesSetter
+}
+
+public class JobAutoInterruptOptions : PropertiesSetter
+{
+    public JobAutoInterruptOptions(IPropertySetter parent) : base(parent, "quartz.plugin.jobAutoInterrupt")
     {
-        internal XmlSchedulingOptions(IPropertySetter parent) : base(parent, "quartz.plugin.xml")
-        {
-        }
+    }
 
-        public string[] Files
-        {
-            set => SetProperty("fileNames", string.Join(",", value));
-        }
+    /// <summary>
+    /// The amount of time the job is allowed to run before job interruption is signaled.
+    /// Defaults to 5 minutes.
+    /// </summary>
+    /// <remarks>
+    /// Per-job value can be configured via JobDataMap via key <see cref="JobInterruptMonitorPlugin.JobDataMapKeyMaxRunTime"/>.
+    /// </remarks>
+    public TimeSpan DefaultMaxRunTime
+    {
+        set => SetProperty("defaultMaxRunTime", value.TotalMilliseconds.ToString(CultureInfo.InvariantCulture));
+    }
+}
 
-        public bool FailOnFileNotFound
-        {
-            set => SetProperty("failOnFileNotFound", value.ToString().ToLowerInvariant());
-        }
+public class XmlSchedulingOptions : PropertiesSetter
+{
+    internal XmlSchedulingOptions(IPropertySetter parent) : base(parent, "quartz.plugin.xml")
+    {
+    }
 
-        public bool FailOnSchedulingError
-        {
-            set => SetProperty("failOnSchedulingError", value.ToString().ToLowerInvariant());
-        }
+    public string[] Files
+    {
+        set => SetProperty("fileNames", string.Join(",", value));
+    }
 
-        public TimeSpan ScanInterval
-        {
-            set => SetProperty("scanInterval", ((int) value.TotalSeconds).ToString());
-        }
+    public bool FailOnFileNotFound
+    {
+        set => SetProperty("failOnFileNotFound", value.ToString().ToLowerInvariant());
+    }
+
+    public bool FailOnSchedulingError
+    {
+        set => SetProperty("failOnSchedulingError", value.ToString().ToLowerInvariant());
+    }
+
+    public TimeSpan ScanInterval
+    {
+        set => SetProperty("scanInterval", ((int) value.TotalSeconds).ToString());
     }
 }

@@ -1,14 +1,19 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
+
   <PropertyGroup>
     <Description>Quartz.NET Plugins; $(Description)</Description>
-    <TargetFrameworks>net461;net472;netstandard2.0</TargetFrameworks>
+    <TargetFrameworks>net472;netstandard2.0</TargetFrameworks>
     <RootNamespace>Quartz</RootNamespace>
     <GenerateDocumentationFile>True</GenerateDocumentationFile>
+    <PackageReadmeFile>quartz-plugins.md</PackageReadmeFile>
   </PropertyGroup>
+
   <ItemGroup>
-    <Compile Include="..\AssemblyInfo.cs" />
+    <None Include="../../docs/documentation/quartz-4.x/packages/quartz-plugins.md" Pack="true" PackagePath="\" />
   </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\Quartz.Jobs\Quartz.Jobs.csproj" />
   </ItemGroup>
+
 </Project>

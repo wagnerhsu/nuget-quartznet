@@ -11,25 +11,17 @@ Please visit [https://www.quartz-scheduler.net/](https://www.quartz-scheduler.ne
 
 ## Compatibility
 
-Quartz.NET supports .NET Core/netstandard 2.0 and .NET Framework 4.6.1 and later.
+Quartz.NET supports .NET Core/netstandard 2.0 and .NET Framework 4.6.2 and later.
 
 ## Installation
 
 * [Stable builds from NuGet](https://www.nuget.org/packages?q=owner%3AQuartz.NET)
-* Pre-release builds from MyGet feed: https://www.myget.org/F/quartznet/api/v3/index.json
+* Pre-release builds from Feedz.io feed: https://f.feedz.io/quartznet/quartznet/nuget/index.json
 
 ## Building
 
 * You can build the code by running `build.cmd` (Windows) or `build.sh` (*nix platform)
-* You need MSBuild 16 and .NET Core SDK 5.0 to build - easiest to [download Visual Studio 2019 Community](https://www.visualstudio.com/downloads/)
-* You need Visual Studio 2019 to open the solution, [Community version](https://www.visualstudio.com/downloads/) should suffice
-
-## Acknowledgements
-
-Following components are being used by core Quartz:
-
-* [LibLog](https://github.com/damianh/LibLog) (MIT) as bridge between different logging frameworks
-
+* You need MSBuild 17 and .NET Core SDK 6.0 to build
 
 ## License
 

@@ -1,9 +1,9 @@
 ---
-layout: default
+
 title: Best Practices
 ---
 
-*This document was adapted from Quartz Java*
+# Best Practices
 
 ## JobDataMap Tips
 
@@ -14,13 +14,72 @@ Only store primitive data types (including strings) in JobDataMap to avoid data 
 ### Use the Merged JobDataMap
 
 The JobDataMap that is found on the `JobExecutionContext` during Job execution serves as a convenience.
-It is a merge of the JobDataMap found on the JobDetail and the one found on the Trigger, with the value in the latter overriding any same-named values in the former.
+The data in the JobDataMap is a merger of the JobDetail and the Trigger, with the data in the Trigger overriding
+any same-named value in the Job.
 
 Storing JobDataMap values on a Trigger can be useful in the case where you have a Job that is stored in the scheduler for regular/repeated use by multiple Triggers,
 yet with each independent triggering, you want to supply the Job with different data inputs.
 
-In light of all of the above, we recommend as a best practice the following: Code within the `IJob.Execute(..)` method should generally retrieve
-values from the JobDataMap on found on the JobExecutionContext, rather than directly from the one on the JobDetail.
+We recommend that code within the `IJob.Execute(..)` method should retrieve
+values from the `MergedJobDataMap` on the `JobExecutionContext`, rather than directly
+from the JobDetail or Trigger.
+
+```csharp
+public class SomeJob : IJob 
+{
+    public static readonly JobKey Key = new JobKey("job-name", "group-name");
+
+    public Task Execute(IJobExecutionContext context) 
+    {
+        // don't do this
+        var badMethod = context.JobDetail.JobDataMap.GetString("a-value");
+        var alsoBadMethod = context.Trigger.JobDataMap.GetString("a-value");
+
+        // do this
+        var goodMethod = context.MergedJobDataMap.GetString("a-value");
+    }
+}
+```
+
+## Job Tips
+
+### Static Job Key
+
+To simplify `JobKey` access we recommend defining a static field that allows
+easy access to the job's key.
+
+```csharp
+public class SomeJob : IJob 
+{
+    public static readonly JobKey Key = new JobKey("job-name", "group-name");
+
+    public Task Execute(IJobExecutionContext context) { /* elided */ }
+}
+```
+
+then later you can trigger the job directly with
+
+```csharp
+public async Task DoSomething(IScheduler schedule, CancellationToken ct)
+{
+    await schedule.TriggerJob(SomeJob.Key, ct)
+}
+```
+
+or schedule it with a trigger
+
+```csharp
+public async Task DoSomething(IScheduler schedule, CancellationToken ct)
+{
+    var trigger = TriggerBuilder.Create()
+                .WithIdentity("a-trigger", "a-group")
+                .ForJob(SomeJob.Key)
+                .StartNow()
+                .Build();
+
+    await schedule.ScheduleJob(trigger, ct)
+}
+```
 
 ## Trigger Tips
 
@@ -28,10 +87,29 @@ values from the JobDataMap on found on the JobExecutionContext, rather than dire
 
 TriggerUtils:
 
-* Offers a simpler way to create triggers (schedules)
-* Has various methods for creating triggers with schedules that meet particular descriptions, as opposed to directly instantiating triggers of a specific type (i.e. SimpleTrigger, CronTrigger, etc.) and then invoking various setter methods to configure them
 * Offers a simple way to create Dates (for start/end dates)
 * Offers helpers for analyzing triggers (e.g. calculating future fire times)
+
+### Use ScheduleJobs
+
+When it is necessary to use multiple jobs with a large number of them in a scheduler (e.g. when calling the same job with different JobData) it is rational to call the `ScheduleJobs` method instead of triggering jobs in a loop or calling them manually one by one:
+
+```csharp
+Dictionary<IJobDetail, IReadOnlyCollection<ITrigger>> jobsDictionary = new();
+foreach (var data in allData)
+{
+    var triggerSet = new HashSet<ITrigger>();
+    IJobDetail job = JobBuilder.Create<JobName>()
+        .UsingJobData("jobData", data.ToString())
+        .Build();
+    ITrigger trigger = TriggerBuilder.Create()
+        .ForJob(job)
+        .Build();
+    triggerSet.Add(trigger);
+    jobsDictionary.Add(job, triggerSet);
+}
+await scheduler.ScheduleJobs(jobsDictionary, replace: true);
+```
 
 ## ADO.NET JobStore
 
@@ -116,12 +194,12 @@ If a listener throws an exception, it may cause other listeners not to be notifi
 
 ## Exposing Scheduler Functionality Through Applications
 
-### Be Careful of Security!
+### Be Careful of Security
 
 Some users expose Quartz's Scheduler functionality through an application user interface. This can be very useful, though it can also be extremely dangerous.
 
-Be sure you don't mistakenly allow users to define jobs of any type they wish, with whatever parameters they wish. 
-For example, Quartz.Jobs package ships with a pre-made job `NativeJob`, which will execute any arbitrary native (operating system) system command that it is defined to. 
+Be sure you don't mistakenly allow users to define jobs of any type they wish, with whatever parameters they wish.
+For example, Quartz.Jobs package ships with a pre-made job `NativeJob`, which will execute any arbitrary native (operating system) system command that it is defined to.
 Malicious users could use this to take control of, or destroy your system.
 
 Likewise other jobs such as `SendEmailJob`, and virtually any others could be used for malicious intent.

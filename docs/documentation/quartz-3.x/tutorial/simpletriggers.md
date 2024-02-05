@@ -1,6 +1,9 @@
 ---
-title: 'SimpleTrigger'
+
+title: 'Simple Triggers'
 ---
+
+# Simple Triggers
 
 SimpleTrigger should meet your scheduling needs if you need to have a job execute exactly once at a specific moment in time,
 or at a specific moment in time followed by repeats at a specific interval. Or plainer english, if you want the trigger to
@@ -73,6 +76,7 @@ ITrigger trigger = TriggerBuilder.Create()
     .EndAt(DateBuilder.DateOf(22, 0, 0))
     .Build();
 ```
+
 __Build a trigger that will fire at the top of the next hour, then repeat every 2 hours, forever:__
 
 ```csharp
@@ -89,13 +93,13 @@ ITrigger trigger = TriggerBuilder.Create()
 await scheduler.scheduleJob(trigger, job);
 ```
 
-Spend some time looking at all of the available methods in the language defined by `TriggerBuilder` and its extension method `WithSimpleSchedule` 
+Spend some time looking at all of the available methods in the language defined by `TriggerBuilder` and its extension method `WithSimpleSchedule`
 so that you can be familiar with options available to you that may not have been demonstrated in the examples above.
 
 ## SimpleTrigger Misfire Instructions
 
 SimpleTrigger has several instructions that can be used to inform Quartz.NET what it should do when a misfire occurs.
-(Misfire situations were introduced in the More About Triggers section of this tutorial).
+(Misfire situations were introduced in the [More About Triggers](/documentation/quartz-3.x/tutorial/more-about-triggers.html) section of this tutorial).
 These instructions are defined as constants on `MisfirePolicy.SimpleTrigger` (including API documentation describing their behavior).
 The instructions include:
 
