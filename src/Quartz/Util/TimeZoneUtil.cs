@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Logging;
 
-using Quartz.Logging;
+using Quartz.Diagnostics;
 
 namespace Quartz.Util;
 
@@ -49,7 +49,9 @@ public static class TimeZoneUtil
         timeZoneIdAliases["Asia/Karachi"] = "Pakistan Standard Time";
     }
 
+#pragma warning disable CA2211
     public static Func<string, TimeZoneInfo?> CustomResolver = id => null;
+#pragma warning restore CA2211
 
     /// <summary>
     /// TimeZoneInfo.ConvertTime is not supported under mono
@@ -59,11 +61,6 @@ public static class TimeZoneUtil
     /// <returns></returns>
     public static DateTimeOffset ConvertTime(DateTimeOffset dateTimeOffset, TimeZoneInfo timeZoneInfo)
     {
-        if (QuartzEnvironment.IsRunningOnMono)
-        {
-            return TimeZoneInfo.ConvertTime(dateTimeOffset.UtcDateTime, TimeZoneInfo.Utc, timeZoneInfo);
-        }
-
         return TimeZoneInfo.ConvertTime(dateTimeOffset, timeZoneInfo);
     }
 
@@ -123,12 +120,12 @@ public static class TimeZoneUtil
                 }
             }
 
-            if (info == null)
+            if (info is null)
             {
                 info = CustomResolver(id);
             }
 
-            if (info == null)
+            if (info is null)
             {
                 // we tried our best
                 throw new TimeZoneNotFoundException(

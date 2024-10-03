@@ -20,17 +20,12 @@
 #endregion
 
 using FluentAssertions;
-
-using NUnit.Framework;
+using FluentAssertions.Execution;
 
 using Quartz.Impl;
 using Quartz.Job;
 using Quartz.Simpl;
 using Quartz.Util;
-
-#if REMOTING
-using Quartz.Tests.Unit.Utils;
-#endif
 
 namespace Quartz.Tests.Unit;
 
@@ -44,10 +39,14 @@ public class JobDetailTest
         JobDetailImpl jd1 = new JobDetailImpl("name", "group", typeof(NoOpJob));
         JobDetailImpl jd2 = new JobDetailImpl("name", "group", typeof(NoOpJob));
         JobDetailImpl jd3 = new JobDetailImpl("namediff", "groupdiff", typeof(NoOpJob));
-        Assert.AreEqual(jd1, jd2);
-        Assert.AreNotEqual(jd1, jd3);
-        Assert.AreNotEqual(jd2, jd3);
-        Assert.AreNotEqual(jd1, null);
+        Assert.Multiple(() =>
+        {
+            Assert.That(jd2, Is.EqualTo(jd1));
+            Assert.That(jd3, Is.Not.EqualTo(jd1));
+            Assert.That(jd3, Is.Not.EqualTo(jd2));
+            Assert.That(jd1, Is.Not.Null);
+        });
+        
     }
 
     [Test]
@@ -56,22 +55,8 @@ public class JobDetailTest
         JobDetailImpl jobDetail = new JobDetailImpl("test", typeof(NoOpJob));
         JobDetailImpl clonedJobDetail = (JobDetailImpl) jobDetail.Clone();
 
-        Assert.AreEqual(jobDetail, clonedJobDetail);
+        Assert.That(clonedJobDetail, Is.EqualTo(jobDetail));
     }
-
-#if REMOTING
-        [Test]
-        public void JobDetailsShouldBeSerializable()
-        {
-            JobDetailImpl original = new JobDetailImpl("name", "group", typeof (NoOpJob));
-
-            JobDetailImpl cloned = original.DeepClone();
-
-            Assert.That(cloned.Name, Is.EqualTo(original.Name));
-            Assert.That(cloned.Group, Is.EqualTo(original.Group));
-            Assert.That(cloned.Key, Is.EqualTo(original.Key));
-        }
-#endif
 
     [Test]
     public void SettingKeyShouldAlsoSetNameAndGroup()
@@ -79,8 +64,11 @@ public class JobDetailTest
         JobDetailImpl detail = new JobDetailImpl(nameof(SettingKeyShouldAlsoSetNameAndGroup), typeof(NoOpJob));
         detail.Key = new JobKey("name", "group");
 
-        Assert.That(detail.Name, Is.EqualTo("name"));
-        Assert.That(detail.Group, Is.EqualTo("group"));
+        Assert.Multiple(() =>
+        {
+            Assert.That(detail.Name, Is.EqualTo("name"));
+            Assert.That(detail.Group, Is.EqualTo("group"));
+        });
     }
 
     [Test]
@@ -90,10 +78,13 @@ public class JobDetailTest
         var typeString = type.AssemblyQualifiedNameWithoutVersion();
         var loadedType = new SimpleTypeLoadHelper().LoadType(typeString);
 
-        Assert.That(typeString, Is.Not.Contains(", Version="));
-
-        Assert.That(loadedType, Is.Not.Null);
-        Assert.That(loadedType, Is.EqualTo(type));
+        Assert.Multiple(() =>
+        {
+            Assert.That(typeString, Is.Not.Contains(", Version="));
+            Assert.That(loadedType, Is.Not.Null);
+            Assert.That(loadedType, Is.EqualTo(type));
+        });
+        
     }
 
     [Test]
@@ -101,9 +92,11 @@ public class JobDetailTest
     {
         var type = typeof(GenericJob<string>);
         var job = new JobDetailImpl("name", "group", type, true, true);
-
-        job.JobType.Type.Should().Be(type);
-        job.JobType.FullName.Should().Be(type.AssemblyQualifiedNameWithoutVersion());
+        using (new AssertionScope())
+        {
+            job.JobType.Type.Should().Be(type);
+            job.JobType.FullName.Should().Be(type.AssemblyQualifiedNameWithoutVersion());
+        }
     }
 
     public class GenericJob<T> : IJob

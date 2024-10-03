@@ -1,6 +1,7 @@
 ---
 
 title:  Mailing List
-redirect: mailing-list.html
-layout: redirect
+redirectTo: mailing-list.html
+
 ---
+

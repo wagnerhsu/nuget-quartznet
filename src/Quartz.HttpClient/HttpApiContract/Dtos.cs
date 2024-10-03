@@ -6,20 +6,14 @@ internal record KeyDto(string Name, string Group) : IValidatable
 {
     public static KeyDto Create(JobKey jobKey)
     {
-        if (jobKey == null)
-        {
-            throw new ArgumentNullException(nameof(jobKey));
-        }
+        ArgumentNullException.ThrowIfNull(jobKey);
 
         return new KeyDto(jobKey.Name, jobKey.Group);
     }
 
     public static KeyDto Create(TriggerKey triggerKey)
     {
-        if (triggerKey == null)
-        {
-            throw new ArgumentNullException(nameof(triggerKey));
-        }
+        ArgumentNullException.ThrowIfNull(triggerKey);
 
         return new KeyDto(triggerKey.Name, triggerKey.Group);
     }
@@ -30,12 +24,12 @@ internal record KeyDto(string Name, string Group) : IValidatable
 
     public IEnumerable<string> Validate()
     {
-        if (Name == null)
+        if (Name is null)
         {
             yield return "Key is missing name";
         }
 
-        if (Group == null)
+        if (Group is null)
         {
             yield return "Key is missing group";
         }
@@ -44,29 +38,26 @@ internal record KeyDto(string Name, string Group) : IValidatable
     public override string ToString() => Group + '.' + Name;
 }
 
-internal record NamesDto(IReadOnlyCollection<string> Names);
+internal record NamesDto(List<string> Names);
 
-internal record SchedulerContextDto(Dictionary<string, string> Context)
+internal record SchedulerContextDto(Dictionary<string, string?> Context)
 {
     public static SchedulerContextDto Create(SchedulerContext context)
     {
-        if (context == null)
-        {
-            throw new ArgumentNullException(nameof(context));
-        }
+        ArgumentNullException.ThrowIfNull(context);
 
         if (context.Values.Any(x => x is not string))
         {
             throw new NotSupportedException("Only string values are supported in SchedulerContext");
         }
 
-        var data = context.ToDictionary(x => x.Key, x => (string) x.Value);
+        var data = context.ToDictionary(x => x.Key, x => (string?) x.Value);
         return new SchedulerContextDto(data);
     }
 
     public SchedulerContext AsContext()
     {
-        return new SchedulerContext(Context.ToDictionary(x => x.Key, x => (object) x.Value));
+        return new SchedulerContext(Context.ToDictionary(x => x.Key, x => (object?) x.Value));
     }
 }
 

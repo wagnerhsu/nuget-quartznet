@@ -1,36 +1,30 @@
 using Microsoft.Extensions.Options;
-using NUnit.Framework;
 
 using Quartz.Impl.Matchers;
 using Quartz.Spi;
 
-#if NET6_OR_GREATER
 using Lifetime = Microsoft.Extensions.Hosting.IHostApplicationLifetime;
-#else
-using Lifetime = Microsoft.Extensions.Hosting.IApplicationLifetime;
-#endif
 
 namespace Quartz.Tests.Unit;
 
-[TestFixture]
 public class QuartzHostedServiceTests
 {
     private sealed class MockApplicationLifetime : Lifetime
     {
-        public CancellationTokenSource StartedSource { get; } = new CancellationTokenSource();
-        public CancellationTokenSource StoppingSource { get; } = new CancellationTokenSource();
-        public CancellationToken ApplicationStarted => this.StartedSource.Token;
-        public CancellationToken ApplicationStopping => this.StoppingSource.Token;
+        public CancellationTokenSource StartedSource { get; } = new();
+        public CancellationTokenSource StoppingSource { get; } = new();
+        public CancellationToken ApplicationStarted => StartedSource.Token;
+        public CancellationToken ApplicationStopping => StoppingSource.Token;
         public CancellationToken ApplicationStopped => throw new NotImplementedException();
 
         public void SetStarted()
         {
-            this.StartedSource.Cancel();
+            StartedSource.Cancel();
         }
 
         public void StopApplication()
         {
-            this.StoppingSource.Cancel();
+            StoppingSource.Cancel();
         }
     }
 
@@ -69,7 +63,7 @@ public class QuartzHostedServiceTests
         public IListenerManager ListenerManager { get; }
         public bool IsStarted { get; private set; }
 
-        public ValueTask AddCalendar(string calName, ICalendar calendar, bool replace, bool updateTriggers, CancellationToken cancellationToken = default)
+        public ValueTask AddCalendar(string name, ICalendar calendar, bool replace, bool updateTriggers, CancellationToken cancellationToken = default)
         {
             throw new NotImplementedException();
         }
@@ -99,7 +93,7 @@ public class QuartzHostedServiceTests
             throw new NotImplementedException();
         }
 
-        public ValueTask<bool> DeleteCalendar(string calName, CancellationToken cancellationToken = default)
+        public ValueTask<bool> DeleteCalendar(string name, CancellationToken cancellationToken = default)
         {
             throw new NotImplementedException();
         }
@@ -114,17 +108,17 @@ public class QuartzHostedServiceTests
             throw new NotImplementedException();
         }
 
-        public ValueTask<ICalendar> GetCalendar(string calName, CancellationToken cancellationToken = default)
+        public ValueTask<ICalendar> GetCalendar(string name, CancellationToken cancellationToken = default)
         {
             throw new NotImplementedException();
         }
 
-        public ValueTask<IReadOnlyCollection<string>> GetCalendarNames(CancellationToken cancellationToken = default)
+        public ValueTask<List<string>> GetCalendarNames(CancellationToken cancellationToken = default)
         {
             throw new NotImplementedException();
         }
 
-        public ValueTask<IReadOnlyCollection<IJobExecutionContext>> GetCurrentlyExecutingJobs(CancellationToken cancellationToken = default)
+        public ValueTask<List<IJobExecutionContext>> GetCurrentlyExecutingJobs(CancellationToken cancellationToken = default)
         {
             throw new NotImplementedException();
         }
@@ -134,12 +128,12 @@ public class QuartzHostedServiceTests
             throw new NotImplementedException();
         }
 
-        public ValueTask<IReadOnlyCollection<string>> GetJobGroupNames(CancellationToken cancellationToken = default)
+        public ValueTask<List<string>> GetJobGroupNames(CancellationToken cancellationToken = default)
         {
             throw new NotImplementedException();
         }
 
-        public ValueTask<IReadOnlyCollection<JobKey>> GetJobKeys(GroupMatcher<JobKey> matcher, CancellationToken cancellationToken = default)
+        public ValueTask<List<JobKey>> GetJobKeys(GroupMatcher<JobKey> matcher, CancellationToken cancellationToken = default)
         {
             throw new NotImplementedException();
         }
@@ -149,7 +143,7 @@ public class QuartzHostedServiceTests
             throw new NotImplementedException();
         }
 
-        public ValueTask<IReadOnlyCollection<string>> GetPausedTriggerGroups(CancellationToken cancellationToken = default)
+        public ValueTask<List<string>> GetPausedTriggerGroups(CancellationToken cancellationToken = default)
         {
             throw new NotImplementedException();
         }
@@ -159,17 +153,17 @@ public class QuartzHostedServiceTests
             throw new NotImplementedException();
         }
 
-        public ValueTask<IReadOnlyCollection<string>> GetTriggerGroupNames(CancellationToken cancellationToken = default)
+        public ValueTask<List<string>> GetTriggerGroupNames(CancellationToken cancellationToken = default)
         {
             throw new NotImplementedException();
         }
 
-        public ValueTask<IReadOnlyCollection<TriggerKey>> GetTriggerKeys(GroupMatcher<TriggerKey> matcher, CancellationToken cancellationToken = default)
+        public ValueTask<List<TriggerKey>> GetTriggerKeys(GroupMatcher<TriggerKey> matcher, CancellationToken cancellationToken = default)
         {
             throw new NotImplementedException();
         }
 
-        public ValueTask<IReadOnlyCollection<ITrigger>> GetTriggersOfJob(JobKey jobKey, CancellationToken cancellationToken = default)
+        public ValueTask<List<ITrigger>> GetTriggersOfJob(JobKey jobKey, CancellationToken cancellationToken = default)
         {
             throw new NotImplementedException();
         }
@@ -308,10 +302,13 @@ public class QuartzHostedServiceTests
         {
             _ = Task.Run(async () =>
             {
-                await Task.Delay(delay, cancellationToken).ContinueWith(_ => { }, TaskContinuationOptions.OnlyOnCanceled);
+                await Task.Delay(delay, cancellationToken)
+                    .ContinueWith(_ => { }, CancellationToken.None, TaskContinuationOptions.OnlyOnCanceled, TaskScheduler.Default);
 
                 if (!cancellationToken.IsCancellationRequested)
+                {
                     await this.Start(cancellationToken);
+                }
             }, CancellationToken.None);
             return default;
         }
@@ -345,10 +342,10 @@ public class QuartzHostedServiceTests
     [Parallelizable(ParallelScope.All)]
     public async Task StartAsync_WithStartedApplication_ShouldGetScheduler(bool awaitApplicationStarted, bool withStartDelay, bool shouldSchedulerBeStarted)
     {
-        var appliationLifetime = new MockApplicationLifetime();
+        var applicationLifetime = new MockApplicationLifetime();
         var schedulerFactory = new MockSchedulerFactory();
         var quartzHostedService = new QuartzHostedService(
-            appliationLifetime,
+            applicationLifetime,
             schedulerFactory,
             Options.Create(new QuartzHostedServiceOptions
             {
@@ -356,15 +353,15 @@ public class QuartzHostedServiceTests
                 StartDelay = withStartDelay ? TimeSpan.FromMinutes(1) : null,
             }));
 
-        Assert.Null(schedulerFactory.LastCreatedScheduler);
+        Assert.That(schedulerFactory.LastCreatedScheduler, Is.Null);
 
         using var startupCts = new CancellationTokenSource();
 
         await quartzHostedService.StartAsync(startupCts.Token);
 
-        Assert.NotNull(schedulerFactory.LastCreatedScheduler);
+        Assert.That(schedulerFactory.LastCreatedScheduler, Is.Not.Null);
 
-        startupCts.Cancel();
+        await startupCts.CancelAsync().ConfigureAwait(false);
     }
 
     [Test]
@@ -390,22 +387,28 @@ public class QuartzHostedServiceTests
 
         await quartzHostedService.StartAsync(startupCts.Token);
 
-        Assert.NotNull(schedulerFactory.LastCreatedScheduler);
-        Assert.AreEqual(shouldSchedulerBeStartedImmediately, schedulerFactory.LastCreatedScheduler.IsStarted);
+        Assert.That(schedulerFactory.LastCreatedScheduler, Is.Not.Null);
+        Assert.That(schedulerFactory.LastCreatedScheduler.IsStarted, Is.EqualTo(shouldSchedulerBeStartedImmediately));
 
         appliationLifetime.SetStarted();
 
         if (quartzHostedService.startupTask is not null)
-            await quartzHostedService.startupTask.ContinueWith(_ => { }); // Wait for the hosted service to respond to the ApplicationStarted token
+        {
+            await quartzHostedService.startupTask
+                .ContinueWith(_ => { }, CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default); // Wait for the hosted service to respond to the ApplicationStarted token
+        }
 
-        Assert.AreEqual(!withStartDelay, schedulerFactory.LastCreatedScheduler.IsStarted);
+        Assert.That(schedulerFactory.LastCreatedScheduler.IsStarted, Is.EqualTo(!withStartDelay));
 
-        startupCts.Cancel();
+        await startupCts.CancelAsync().ConfigureAwait(false);
 
         await quartzHostedService.StopAsync(CancellationToken.None);
 
-        Assert.False(schedulerFactory.LastCreatedScheduler.IsStarted);
-        Assert.True(schedulerFactory.LastCreatedScheduler.IsShutdown);
+        Assert.Multiple(() =>
+        {
+            Assert.That(schedulerFactory.LastCreatedScheduler.IsStarted, Is.False);
+            Assert.That(schedulerFactory.LastCreatedScheduler.IsShutdown, Is.True);
+        });
     }
 
     [Test]
@@ -431,11 +434,11 @@ public class QuartzHostedServiceTests
 
         var startupTask = quartzHostedService.StartAsync(startupCts.Token);
 
-        startupCts.Cancel();
+        await startupCts.CancelAsync().ConfigureAwait(false);
 
         await startupTask;
 
-        Assert.AreEqual(shouldSchedulerBeStarted, schedulerFactory.LastCreatedScheduler.IsStarted);
+        Assert.That(schedulerFactory.LastCreatedScheduler.IsStarted, Is.EqualTo(shouldSchedulerBeStarted));
     }
 
     [Test]
@@ -466,12 +469,19 @@ public class QuartzHostedServiceTests
         await quartzHostedService.StopAsync(CancellationToken.None);
 
         if (quartzHostedService.startupTask is not null)
-            await quartzHostedService.startupTask.ContinueWith(_ => { }); // Wait for the hosted service to respond to the ApplicationStarted token
+        {
+            await quartzHostedService.startupTask
+                .ContinueWith(_ => { }, CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default); // Wait for the hosted service to respond to the ApplicationStarted token
+        }
 
         // Confirm that not only have we stopped, but that we have not started AFTER being stopped
-        if (shouldSchedulerBeStarted) Assert.True(schedulerFactory.LastCreatedScheduler.IsShutdown);
-        Assert.False(schedulerFactory.LastCreatedScheduler.IsStarted);
+        if (shouldSchedulerBeStarted)
+        {
+            Assert.That(schedulerFactory.LastCreatedScheduler.IsShutdown, Is.True);
+        }
 
-        startupCts.Cancel();
+        Assert.That(schedulerFactory.LastCreatedScheduler.IsStarted, Is.False);
+
+        await startupCts.CancelAsync().ConfigureAwait(false);
     }
 }

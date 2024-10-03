@@ -46,13 +46,16 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Quartz.Examples.Worker", "s
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Quartz.Benchmark", "src\Quartz.Benchmark\Quartz.Benchmark.csproj", "{23DEAB6E-D12C-40F6-A50E-6584FEAA389C}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "GitHub", "GitHub", "{354EFE76-4FA8-45C9-A3D4-585B8E00D242}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".github", ".github", "{354EFE76-4FA8-45C9-A3D4-585B8E00D242}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Workflows", "Workflows", "{BB894600-46FC-4EAD-84C8-F98622A3D012}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "workflows", "workflows", "{BB894600-46FC-4EAD-84C8-F98622A3D012}"
 ProjectSection(SolutionItems) = preProject
 	.github\workflows\docs.yml = .github\workflows\docs.yml
 	.github\workflows\build.yml = .github\workflows\build.yml
-	.github\workflows\pr.yml = .github\workflows\pr.yml
+	.github\workflows\docs-pr.yml = .github\workflows\docs-pr.yml
+	.github\workflows\pr-tests-integration-postgres.yml = .github\workflows\pr-tests-integration-postgres.yml
+	.github\workflows\pr-tests-unit.yml = .github\workflows\pr-tests-unit.yml
+	.github\workflows\qodana_code_quality.yml = .github\workflows\qodana_code_quality.yml
 EndProjectSection
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "_build", "build\_build.csproj", "{1252A3D8-2CF1-4AF6-A80C-A9889634543B}"
@@ -63,9 +66,12 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Quartz.HttpClient", "src\Qu
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Quartz.Examples.HttpClient", "src\Quartz.Examples.HttpClient\Quartz.Examples.HttpClient.csproj", "{A6577639-66AB-480A-9861-027E6EE72167}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Quartz.Serialization.SystemTextJson", "src\Quartz.Serialization.SystemTextJson\Quartz.Serialization.SystemTextJson.csproj", "{597EEF73-F5A2-4E2C-9175-7F465D575C8B}"
-EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tests", "Tests", "{32367329-6157-4580-BB06-F7DD68FC1658}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Analyzers", "Analyzers", "{CBE8BDDE-B71F-4A95-B184-E6CBEBE40231}"
+	ProjectSection(SolutionItems) = preProject
+		Analyzers\bannedsymbols.txt = Analyzers\bannedsymbols.txt
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -139,10 +145,6 @@ Global
 		{A6577639-66AB-480A-9861-027E6EE72167}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A6577639-66AB-480A-9861-027E6EE72167}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A6577639-66AB-480A-9861-027E6EE72167}.Release|Any CPU.Build.0 = Release|Any CPU
-		{597EEF73-F5A2-4E2C-9175-7F465D575C8B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{597EEF73-F5A2-4E2C-9175-7F465D575C8B}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{597EEF73-F5A2-4E2C-9175-7F465D575C8B}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{597EEF73-F5A2-4E2C-9175-7F465D575C8B}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -157,6 +159,7 @@ Global
 		{12EA4497-DCEC-4C1A-83BD-FFAFA2C01A25} = {32367329-6157-4580-BB06-F7DD68FC1658}
 		{54FCAFBB-0040-4FBB-96BB-0AE9C70742B0} = {32367329-6157-4580-BB06-F7DD68FC1658}
 		{98DAF894-D837-47EC-9472-50C832AFC8B2} = {32367329-6157-4580-BB06-F7DD68FC1658}
+		{CBE8BDDE-B71F-4A95-B184-E6CBEBE40231} = {7E6034DE-2AF7-42CE-B9E3-A1B3B582E6DA}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {A8666F1F-9B78-4A1D-A3DB-0E91324AB539}

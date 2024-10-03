@@ -22,7 +22,7 @@ using Quartz.Spi;
 namespace Quartz.Core;
 
 /// <summary>
-/// Contains all of the resources (<see cref="IJobStore" />,<see cref="IThreadPool" />,
+/// Contains all the resources (<see cref="IJobStore" />,<see cref="IThreadPool" />,
 /// etc.) necessary to create a <see cref="QuartzScheduler" /> instance.
 /// </summary>
 /// <seealso cref="QuartzScheduler" />
@@ -49,6 +49,8 @@ public sealed class QuartzSchedulerResources
         _maxBatchSize = DefaultMaxBatchSize;
         _idleWaitTime = DefaultIdleWaitTime;
         _batchTimeWindow = DefaultBatchTimeWindow;
+        TimeProvider = TimeProvider.System;
+        SchedulerRepository = Impl.SchedulerRepository.Instance;
     }
 
     /// <summary>
@@ -69,7 +71,7 @@ public sealed class QuartzSchedulerResources
 
             name = value;
 
-            if (threadName == null)
+            if (threadName is null)
             {
                 // thread name not already set, use default thread name
                 ThreadName = $"{value}_QuartzSchedulerThread";
@@ -226,12 +228,6 @@ public sealed class QuartzSchedulerResources
     public bool MakeSchedulerThreadDaemon { get; set; }
 
     /// <summary>
-    /// Gets or sets the scheduler exporter.
-    /// </summary>
-    /// <value>The scheduler exporter.</value>
-    public ISchedulerExporter? SchedulerExporter { get; set; }
-
-    /// <summary>
     /// Gets or sets a value that determines how long the scheduler should wait before checking again
     /// when there is no current trigger to fire.
     /// </summary>
@@ -301,4 +297,8 @@ public sealed class QuartzSchedulerResources
     public bool InterruptJobsOnShutdown { get; set; }
 
     public bool InterruptJobsOnShutdownWithWait { get; set; }
+
+    public TimeProvider TimeProvider { get; set; }
+
+    internal ISchedulerRepository SchedulerRepository { get; set; }
 }

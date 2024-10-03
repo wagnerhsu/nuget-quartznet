@@ -122,18 +122,16 @@ public partial class StdAdoDelegate
     }
 
     /// <inheritdoc />
-    public virtual async ValueTask<IReadOnlyCollection<string>> SelectCalendars(
-        ConnectionAndTransactionHolder conn,
-        CancellationToken cancellationToken = default)
+    public virtual async ValueTask<List<string>> SelectCalendars(ConnectionAndTransactionHolder conn, CancellationToken cancellationToken = default)
     {
         using var cmd = PrepareCommand(conn, ReplaceTablePrefix(SqlSelectCalendars));
         AddCommandParameter(cmd, "schedulerName", schedName);
 
         using var rs = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-        List<string> list = new List<string>();
+        List<string> list = [];
         while (await rs.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
-            list.Add((string) rs[0]);
+            list.Add(rs.GetString(0));
         }
 
         return list;

@@ -22,8 +22,6 @@
 using System.Collections.Specialized;
 using System.Text;
 
-using NUnit.Framework;
-
 using Quartz.Impl;
 using Quartz.Impl.Triggers;
 using Quartz.Spi;
@@ -45,6 +43,12 @@ public class PriorityTest
     {
         result = new StringBuilder();
         countdownEvent = new CountdownEvent(2);
+    }
+
+    [TearDown]
+    public void TearDown()
+    {
+        countdownEvent.Dispose();
     }
 
     [Test]
@@ -74,7 +78,7 @@ public class PriorityTest
 
         countdownEvent.Wait();
 
-        Assert.AreEqual("T1T2", result.ToString());
+        Assert.That(result.ToString(), Is.EqualTo("T1T2"));
 
         await sched.Shutdown();
     }
@@ -109,7 +113,7 @@ public class PriorityTest
 
         countdownEvent.Wait();
 
-        Assert.AreEqual("T2T1", result.ToString());
+        Assert.That(result.ToString(), Is.EqualTo("T2T1"));
 
         await sched.Shutdown();
     }

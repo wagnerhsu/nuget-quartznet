@@ -32,7 +32,7 @@ namespace Quartz;
 /// <remarks>
 /// Future versions of Quartz may make distinctions on how it propagates
 /// data in <see cref="SchedulerContext" /> between instances of proxies to a
-/// single scheduler instance - i.e. if Quartz is being used via WCF of Remoting.
+/// single scheduler instance - i.e. if Quartz is being used via RPC.
 /// </remarks>
 /// <seealso cref="IScheduler.Context" />
 /// <author>James House</author>
@@ -50,7 +50,7 @@ public sealed class SchedulerContext : StringKeyDirtyFlagMap
     /// <summary>
     /// Create a <see cref="JobDataMap" /> with the given data.
     /// </summary>
-    public SchedulerContext(IDictionary<string, object> map) : this()
+    public SchedulerContext(IDictionary<string, object?> map) : this()
     {
         PutAll(map);
     }

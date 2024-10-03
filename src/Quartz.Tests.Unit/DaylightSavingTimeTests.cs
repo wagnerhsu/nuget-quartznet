@@ -17,28 +17,22 @@
  */
 #endregion
 
-using NUnit.Framework;
-
 using TimeZoneConverter;
 
 namespace Quartz.Tests.Unit;
 
-[TestFixture]
 public class DaylightSavingTimeTest
 {
-    private Func<DateTimeOffset> OriginalUtcNow;
-
-    [OneTimeSetUp]
-    public void Init()
+    private sealed class TestTimeProvider : TimeProvider
     {
-        OriginalUtcNow = SystemTime.UtcNow;
-        SystemTime.UtcNow = () => new DateTimeOffset(2016, 1, 1, 0, 0, 0, TimeSpan.Zero);
-    }
+        private readonly DateTimeOffset utcNow;
 
-    [OneTimeTearDown]
-    public void Dispose()
-    {
-        SystemTime.UtcNow = OriginalUtcNow;
+        public TestTimeProvider(DateTimeOffset utcNow)
+        {
+            this.utcNow = utcNow;
+        }
+
+        public override DateTimeOffset GetUtcNow() => utcNow;
     }
 
     [Test]
@@ -46,7 +40,7 @@ public class DaylightSavingTimeTest
     {
         TimeZoneInfo tz = TZConvert.GetTimeZoneInfo("Pacific Standard Time");
 
-        ITrigger trigger = TriggerBuilder.Create()
+        ITrigger trigger = TriggerBuilder.Create(new TestTimeProvider(new DateTimeOffset(2016, 1, 1, 0, 0, 0, TimeSpan.Zero)))
             .WithIdentity("trigger1", "group1")
             .WithSchedule(CronScheduleBuilder.DailyAtHourAndMinute(2, 30).InTimeZone(tz))
             .ForJob("job1", "group1")
@@ -59,12 +53,12 @@ public class DaylightSavingTimeTest
         DateTimeOffset expectedTime = new DateTimeOffset(2016, 3, 13, 3, 30, 0, TimeSpan.FromHours(-7));
 
         // We should definitely have a value
-        Assert.NotNull(fireTime);
+        Assert.That(fireTime, Is.Not.Null);
 
         // fireTime always is in UTC, but DateTimeOffset comparison normalized to UTC anyway.
         // Conversion here is for clarity of interpreting errors if the test fails.
         DateTimeOffset convertedFireTime = TimeZoneInfo.ConvertTime(fireTime.Value, tz);
-        Assert.AreEqual(expectedTime, convertedFireTime);
+        Assert.That(convertedFireTime, Is.EqualTo(expectedTime));
     }
 
     [Test]
@@ -72,7 +66,7 @@ public class DaylightSavingTimeTest
     {
         TimeZoneInfo tz = TZConvert.GetTimeZoneInfo("Pacific Standard Time");
 
-        ITrigger trigger = TriggerBuilder.Create()
+        ITrigger trigger = TriggerBuilder.Create(new TestTimeProvider(new DateTimeOffset(2016, 1, 1, 0, 0, 0, TimeSpan.Zero)))
             .WithIdentity("trigger1", "group1")
             .WithSchedule(CronScheduleBuilder.DailyAtHourAndMinute(1, 30).InTimeZone(tz))
             .ForJob("job1", "group1")
@@ -85,12 +79,12 @@ public class DaylightSavingTimeTest
         DateTimeOffset expectedTime = new DateTimeOffset(2016, 11, 6, 1, 30, 0, TimeSpan.FromHours(-7));
 
         // We should definitely have a value
-        Assert.NotNull(fireTime);
+        Assert.That(fireTime, Is.Not.Null);
 
         // fireTime always is in UTC, but DateTimeOffset comparison normalized to UTC anyway.
         // Conversion here is for clarity of interpreting errors if the test fails.
         DateTimeOffset convertedFireTime = TimeZoneInfo.ConvertTime(fireTime.Value, tz);
-        Assert.AreEqual(expectedTime, convertedFireTime);
+        Assert.That(convertedFireTime, Is.EqualTo(expectedTime));
     }
 
     [Test]
@@ -98,7 +92,7 @@ public class DaylightSavingTimeTest
     {
         TimeZoneInfo tz = TZConvert.GetTimeZoneInfo("Pacific Standard Time");
 
-        ITrigger trigger = TriggerBuilder.Create()
+        ITrigger trigger = TriggerBuilder.Create(new TestTimeProvider(new DateTimeOffset(2016, 1, 1, 0, 0, 0, TimeSpan.Zero)))
             .WithIdentity("trigger1", "group1")
             .WithSchedule(CronScheduleBuilder.DailyAtHourAndMinute(1, 30).InTimeZone(tz))
             .ForJob("job1", "group1")
@@ -111,11 +105,11 @@ public class DaylightSavingTimeTest
         DateTimeOffset expectedTime = new DateTimeOffset(2016, 11, 7, 1, 30, 0, TimeSpan.FromHours(-8));
 
         // We should definitely have a value
-        Assert.NotNull(fireTime);
+        Assert.That(fireTime, Is.Not.Null);
 
         // fireTime always is in UTC, but DateTimeOffset comparison normalized to UTC anyway.
         // Conversion here is for clarity of interpreting errors if the test fails.
         DateTimeOffset convertedFireTime = TimeZoneInfo.ConvertTime(fireTime.Value, tz);
-        Assert.AreEqual(expectedTime, convertedFireTime);
+        Assert.That(convertedFireTime, Is.EqualTo(expectedTime));
     }
 }

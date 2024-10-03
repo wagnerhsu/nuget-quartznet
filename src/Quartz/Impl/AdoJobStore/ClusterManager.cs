@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Logging;
 
-using Quartz.Logging;
+using Quartz.Diagnostics;
 using Quartz.Util;
 
 namespace Quartz.Impl.AdoJobStore;
@@ -77,7 +77,7 @@ internal sealed class ClusterManager
             token.ThrowIfCancellationRequested();
 
             TimeSpan timeToSleep = jobStoreSupport.ClusterCheckinInterval;
-            TimeSpan transpiredTime = SystemTime.UtcNow() - jobStoreSupport.LastCheckin;
+            TimeSpan transpiredTime = jobStoreSupport.timeProvider.GetUtcNow() - jobStoreSupport.LastCheckin;
             timeToSleep = timeToSleep - transpiredTime;
             if (timeToSleep <= TimeSpan.Zero)
             {
@@ -95,7 +95,7 @@ internal sealed class ClusterManager
 
             if (await Manage().ConfigureAwait(false))
             {
-                jobStoreSupport.SignalSchedulingChangeImmediately(SchedulerConstants.SchedulingSignalDateTime);
+                await jobStoreSupport.SignalSchedulingChangeImmediately(SchedulerConstants.SchedulingSignalDateTime).ConfigureAwait(false);
             }
         }
         // ReSharper disable once FunctionNeverReturns

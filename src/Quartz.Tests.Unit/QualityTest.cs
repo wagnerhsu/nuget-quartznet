@@ -1,7 +1,5 @@
-using System.Reflection;
+﻿using System.Reflection;
 using System.Runtime.CompilerServices;
-
-using NUnit.Framework;
 
 namespace Quartz.Tests.Unit;
 
@@ -26,7 +24,8 @@ public class QualityTest
             .Select(method =>
                 $"'{method.DeclaringType.Name}.{method.Name}' is an async void method.")
             .ToList();
-        Assert.False(messages.Any(),
+        Assert.That(messages.Any(),
+            Is.False,
             "Async void methods found!" + Environment.NewLine + string.Join(Environment.NewLine, messages));
     }
 }
@@ -35,7 +34,7 @@ public static class ReflectionUtils
 {
     private static IEnumerable<Type> GetLoadableTypes(this Assembly assembly)
     {
-        if (assembly == null)
+        if (assembly is null)
         {
             throw new ArgumentNullException(nameof(assembly));
         }
@@ -45,7 +44,7 @@ public static class ReflectionUtils
         }
         catch (ReflectionTypeLoadException e)
         {
-            return e.Types.Where(t => t != null);
+            return e.Types.Where(t => t is not null);
         }
     }
 

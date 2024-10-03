@@ -1,9 +1,9 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 
 using Microsoft.Extensions.Logging;
 
 using Quartz.Listener;
-using Quartz.Logging;
+using Quartz.Diagnostics;
 using Quartz.Spi;
 using Quartz.Util;
 
@@ -47,13 +47,11 @@ public class JobInterruptMonitorPlugin : TriggerListenerSupport, ISchedulerPlugi
     private void ScheduleJobInterruptMonitor(string fireInstanceId, JobKey jobkey, TimeSpan delay)
     {
         var monitor = new InterruptMonitor(fireInstanceId, jobkey, scheduler, delay);
-#pragma warning disable MA0134
-        Task.Factory.StartNew(
+        _ = Task.Factory.StartNew(
             monitor.Run,
             monitor.cancellationTokenSource.Token,
             TaskCreationOptions.HideScheduler,
             taskScheduler).Unwrap();
-#pragma warning restore MA0134
 
         interruptMonitors.TryAdd(fireInstanceId, monitor);
     }
@@ -76,16 +74,16 @@ public class JobInterruptMonitorPlugin : TriggerListenerSupport, ISchedulerPlugi
         try
         {
             // Schedule Monitor only if the job wants AutoInterruptable functionality
-            if (context.JobDetail.JobDataMap.TryGetBooleanValue(JobDataMapKeyAutoInterruptable, out var value) && value)
+            if (context.JobDetail.JobDataMap.TryGetBoolean(JobDataMapKeyAutoInterruptable, out bool value) && value)
             {
-                var monitorPlugin = (JobInterruptMonitorPlugin) context.Scheduler.Context[JobInterruptMonitorKey];
+                var monitorPlugin = (JobInterruptMonitorPlugin) context.Scheduler.Context[JobInterruptMonitorKey]!;
 
                 // Get the MaxRuntime from MergedJobDataMap if NOT available use MaxRunTime from Plugin Configuration
                 var jobDataDelay = DefaultMaxRunTime;
 
-                if (context.MergedJobDataMap.GetString(JobDataMapKeyMaxRunTime) != null)
+                if (context.MergedJobDataMap.GetString(JobDataMapKeyMaxRunTime) is not null)
                 {
-                    jobDataDelay = TimeSpan.FromMilliseconds(context.MergedJobDataMap.GetLongValueFromString(JobDataMapKeyMaxRunTime));
+                    jobDataDelay = TimeSpan.FromMilliseconds(context.MergedJobDataMap.GetLong(JobDataMapKeyMaxRunTime));
                 }
 
                 monitorPlugin.ScheduleJobInterruptMonitor(context.FireInstanceId, context.JobDetail.Key, jobDataDelay);

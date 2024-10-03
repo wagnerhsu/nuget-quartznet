@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Logging;
 
 using Quartz.Impl;
-using Quartz.Logging;
+using Quartz.Diagnostics;
 
 using Topshelf;
 
@@ -87,7 +87,9 @@ public class QuartzServer : ServiceControl, IQuartzServer
     /// <summary>
     /// Stops this instance, delegates to scheduler.
     /// </summary>
+#pragma warning disable CA1716
     public virtual async ValueTask Stop()
+#pragma warning restore CA1716
     {
         try
         {
@@ -131,7 +133,7 @@ public class QuartzServer : ServiceControl, IQuartzServer
     /// </summary>
     public bool Start(HostControl hostControl)
     {
-        Start().GetAwaiter().GetResult();
+        Start().AsTask().GetAwaiter().GetResult();
         return true;
     }
 
@@ -140,7 +142,7 @@ public class QuartzServer : ServiceControl, IQuartzServer
     /// </summary>
     public bool Stop(HostControl hostControl)
     {
-        Stop().GetAwaiter().GetResult();
+        Stop().AsTask().GetAwaiter().GetResult();
         return true;
     }
 }

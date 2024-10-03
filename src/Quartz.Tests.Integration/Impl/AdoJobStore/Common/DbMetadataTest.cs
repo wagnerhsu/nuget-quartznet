@@ -19,8 +19,6 @@
 
 #endregion
 
-using NUnit.Framework;
-
 using Quartz.Impl.AdoJobStore.Common;
 
 namespace Quartz.Tests.Integration.Impl.AdoJobStore.Common;
@@ -50,38 +48,18 @@ public class DbMetadataTest
         TestDbMetadata("MySqlConnector");
     }
 
-#if NETFRAMEWORK
-
-    [Test]
-    [Category("db-oracle")]
-    public void TestDbMetadataOracleODP()
-    {
-        TestDbMetadata("OracleODP");
-    }
-
-    [Test]
-    [Category("db-oracle")]
-    public void TestDbMetadataOracleODPManaged()
-    {
-        var provider = TestDbMetadata("OracleODPManaged");
-        var command = (Oracle.ManagedDataAccess.Client.OracleCommand) provider.CreateCommand();
-        Assert.That(command.BindByName, Is.True, "bind by name should default to true");
-    }
-#endif
-
     private static DbProvider TestDbMetadata(string dbname, bool hashCustomBinaryType = true)
     {
         DbProvider dbp = new DbProvider(dbname, "foo");
         DbMetadata md = dbp.Metadata;
-        Assert.IsNotNull(md.AssemblyName);
-        Assert.IsNotNull(md.BindByName);
-        Assert.IsNotNull(md.CommandType);
-        Assert.IsNotNull(md.ConnectionType);
-        Assert.IsNotNull(md.ParameterType);
+        Assert.That(md.AssemblyName, Is.Not.Null);
+        Assert.That(md.CommandType, Is.Not.Null);
+        Assert.That(md.ConnectionType, Is.Not.Null);
+        Assert.That(md.ParameterType, Is.Not.Null);
         if (hashCustomBinaryType)
         {
-            Assert.IsNotNull(md.DbBinaryType);
-            Assert.IsNotNull(md.ParameterDbTypeProperty);
+            Assert.That(md.DbBinaryType, Is.Not.Null);
+            Assert.That(md.ParameterDbTypeProperty, Is.Not.Null);
         }
         return dbp;
     }

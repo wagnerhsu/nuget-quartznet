@@ -17,9 +17,9 @@ internal static class EndpointConventionBuilderExtensions
             .Add(endpoint =>
             {
                 var requestDelegateToWrap = endpoint.RequestDelegate;
-                if (requestDelegateToWrap == null)
+                if (requestDelegateToWrap is null)
                 {
-                    throw new Exception($"Endpoint {endpoint.DisplayName} has null RequestDelegate");
+                    throw new InvalidOperationException($"Endpoint {endpoint.DisplayName} has null RequestDelegate");
                 }
 
                 endpoint.RequestDelegate = context => ExceptionHandlingWrapper(context, requestDelegateToWrap);
@@ -37,7 +37,7 @@ internal static class EndpointConventionBuilderExtensions
         catch (Exception e)
         {
             var result = context.RequestServices.GetService<ExceptionHandler>()?.HandleException(e, context);
-            if (result == null)
+            if (result is null)
             {
                 throw;
             }

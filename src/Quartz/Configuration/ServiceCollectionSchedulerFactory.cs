@@ -1,9 +1,11 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 using Quartz.Configuration;
 using Quartz.Impl;
+using Quartz.Spi;
 using Quartz.Util;
 
 namespace Quartz;
@@ -16,14 +18,16 @@ internal sealed class ServiceCollectionSchedulerFactory : StdSchedulerFactory
     private readonly IServiceProvider serviceProvider;
     private readonly IOptions<QuartzOptions> options;
     private readonly ContainerConfigurationProcessor processor;
-    private bool initialized;
-    private readonly SemaphoreSlim initializationLock = new SemaphoreSlim(1, 1);
+    private readonly SemaphoreSlim semaphore = new(1, 1);
+    private IScheduler? initializedScheduler;
 
     public ServiceCollectionSchedulerFactory(
+        ILogger<ServiceCollectionSchedulerFactory> logger,
         IServiceProvider serviceProvider,
         IOptions<QuartzOptions> options,
         ContainerConfigurationProcessor processor)
     {
+        this.logger = logger;
         this.serviceProvider = serviceProvider;
         this.options = options;
         this.processor = processor;
@@ -31,27 +35,31 @@ internal sealed class ServiceCollectionSchedulerFactory : StdSchedulerFactory
 
     public override async ValueTask<IScheduler> GetScheduler(CancellationToken cancellationToken = default)
     {
-        base.Initialize(options.Value.ToNameValueCollection());
-        var scheduler = await base.GetScheduler(cancellationToken).ConfigureAwait(false);
-        if (initialized)
-        {
-            return scheduler;
-        }
-
-        await initializationLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            if (!initialized)
+            if (initializedScheduler is null)
             {
-                await InitializeScheduler(scheduler, cancellationToken).ConfigureAwait(false);
-                initialized = true;
+                Initialize(options.Value.ToNameValueCollection());
             }
+
+            var scheduler = await base.GetScheduler(cancellationToken).ConfigureAwait(false);
+
+            // The base method may produce a new scheduler in the event that the original scheduler was stopped
+            if (ReferenceEquals(scheduler, initializedScheduler))
+            {
+                return scheduler;
+            }
+
+            await InitializeScheduler(scheduler, cancellationToken).ConfigureAwait(false);
+            initializedScheduler = scheduler;
+
+            return scheduler;
         }
         finally
         {
-            initializationLock.Release();
+            semaphore.Release();
         }
-        return scheduler;
     }
 
     private async Task InitializeScheduler(IScheduler scheduler, CancellationToken cancellationToken)
@@ -86,10 +94,20 @@ internal sealed class ServiceCollectionSchedulerFactory : StdSchedulerFactory
         await processor.ScheduleJobs(scheduler, cancellationToken).ConfigureAwait(false);
     }
 
+    protected override ISchedulerRepository GetSchedulerRepository()
+    {
+        return serviceProvider.GetRequiredService<ISchedulerRepository>();
+    }
+
+    protected override IDbConnectionManager GetDbConnectionManager()
+    {
+        return serviceProvider.GetRequiredService<IDbConnectionManager>();
+    }
+
     protected override string? GetNamedConnectionString(string connectionStringName)
     {
         var configuration = serviceProvider.GetService<IConfiguration>();
-        var connectionString = configuration.GetConnectionString(connectionStringName);
+        var connectionString = configuration?.GetConnectionString(connectionStringName);
         if (!string.IsNullOrWhiteSpace(connectionString))
         {
             return connectionString;
@@ -105,6 +123,7 @@ internal sealed class ServiceCollectionSchedulerFactory : StdSchedulerFactory
         {
             service = ObjectUtils.InstantiateType<T>(implementationType);
         }
+
         return service;
     }
 }

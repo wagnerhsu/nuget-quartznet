@@ -25,7 +25,7 @@ using System.Text;
 
 using Microsoft.Extensions.Logging;
 
-using Quartz.Logging;
+using Quartz.Diagnostics;
 
 namespace Quartz.Job;
 
@@ -165,7 +165,7 @@ public class SendMailJob : IJob
 
     protected virtual string? GetOptionalParameter(JobDataMap data, string propertyName)
     {
-        var value = data.GetString(propertyName);
+        data.TryGetString(propertyName, out string? value);
         return string.IsNullOrEmpty(value) ? null : value;
     }
 
@@ -175,12 +175,12 @@ public class SendMailJob : IJob
 
         using (var client = new SmtpClient(mailInfo.SmtpHost))
         {
-            if (mailInfo.SmtpUserName != null)
+            if (mailInfo.SmtpUserName is not null)
             {
                 client.Credentials = new NetworkCredential(mailInfo.SmtpUserName, mailInfo.SmtpPassword);
             }
 
-            if (mailInfo.SmtpPort != null)
+            if (mailInfo.SmtpPort is not null)
             {
                 client.Port = mailInfo.SmtpPort.Value;
             }

@@ -1,4 +1,3 @@
-using NUnit.Framework;
 using Quartz.Impl.Triggers;
 
 namespace Quartz.Tests.Unit.Impl.Triggers;
@@ -28,8 +27,7 @@ public class SimpleTriggerImplTest
         DateTimeOffset? afterTimeUtc = null;
 
         var actual = trigger.GetFireTimeAfter(afterTimeUtc);
-
-        Assert.IsNull(actual);
+        Assert.That(actual, Is.Null);
     }
 
     [Test]
@@ -50,7 +48,7 @@ public class SimpleTriggerImplTest
 
         var actual = trigger.GetFireTimeAfter(afterTimeUtc);
 
-        Assert.IsNull(actual);
+        Assert.That(actual, Is.Null);
     }
 
     [Test]
@@ -71,8 +69,8 @@ public class SimpleTriggerImplTest
 
         var actual = trigger.GetFireTimeAfter(afterTimeUtc);
 
-        Assert.IsNotNull(actual);
-        Assert.AreEqual(startTimeUtc.AddDays(2), actual);
+        Assert.That(actual, Is.Not.Null);
+        Assert.That(actual, Is.EqualTo(startTimeUtc.AddDays(2)));
     }
 
     [Test]
@@ -94,7 +92,7 @@ public class SimpleTriggerImplTest
 
         var actual = trigger.GetFireTimeAfter(afterTimeUtc);
 
-        Assert.IsNull(actual);
+        Assert.That(actual, Is.Null);
     }
 
     [Test]
@@ -115,7 +113,7 @@ public class SimpleTriggerImplTest
 
         var actual = trigger.GetFireTimeAfter(afterTimeUtc);
 
-        Assert.IsNull(actual);
+        Assert.That(actual, Is.Null);
     }
 
     [Test]
@@ -136,7 +134,7 @@ public class SimpleTriggerImplTest
 
         var actual = trigger.GetFireTimeAfter(afterTimeUtc);
 
-        Assert.IsNull(actual);
+        Assert.That(actual, Is.Null);
     }
 
     [Test]
@@ -157,7 +155,7 @@ public class SimpleTriggerImplTest
 
         var actual = trigger.GetFireTimeAfter(afterTimeUtc);
 
-        Assert.IsNull(actual);
+        Assert.That(actual, Is.Null);
     }
 
     [Test]
@@ -178,7 +176,7 @@ public class SimpleTriggerImplTest
 
         var actual = trigger.GetFireTimeAfter(afterTimeUtc);
 
-        Assert.IsNull(actual);
+        Assert.That(actual, Is.Null);
     }
 
     [Test]
@@ -199,8 +197,8 @@ public class SimpleTriggerImplTest
 
         var actual = trigger.GetFireTimeAfter(afterTimeUtc);
 
-        Assert.IsNotNull(actual);
-        Assert.AreEqual(startTimeUtc, actual);
+        Assert.That(actual, Is.Not.Null);
+        Assert.That(actual, Is.EqualTo(startTimeUtc));
     }
 
     [Test]
@@ -221,8 +219,8 @@ public class SimpleTriggerImplTest
 
         var actual = trigger.GetFireTimeAfter(afterTimeUtc);
 
-        Assert.IsNotNull(actual);
-        Assert.AreEqual(startTimeUtc, actual);
+        Assert.That(actual, Is.Not.Null);
+        Assert.That(actual, Is.EqualTo(startTimeUtc));
     }
 
     [Test]
@@ -243,7 +241,7 @@ public class SimpleTriggerImplTest
 
         var actual = trigger.GetFireTimeAfter(afterTimeUtc);
 
-        Assert.IsNull(actual);
+        Assert.That(actual, Is.Null);
     }
 
     [Test]
@@ -264,7 +262,7 @@ public class SimpleTriggerImplTest
 
         var actual = trigger.GetFireTimeAfter(afterTimeUtc);
 
-        Assert.IsNull(actual);
+        Assert.That(actual, Is.Null);
     }
 
     [Test]
@@ -285,8 +283,8 @@ public class SimpleTriggerImplTest
 
         var actual = trigger.GetFireTimeAfter(afterTimeUtc);
 
-        Assert.IsNotNull(actual);
-        Assert.AreEqual(startTimeUtc.Add(TimeSpan.FromDays(1)), actual);
+        Assert.That(actual, Is.Not.Null);
+        Assert.That(actual, Is.EqualTo(startTimeUtc.Add(TimeSpan.FromDays(1))));
     }
 
     [Test]
@@ -307,8 +305,8 @@ public class SimpleTriggerImplTest
 
         var actual = trigger.GetFireTimeAfter(afterTimeUtc);
 
-        Assert.IsNotNull(actual);
-        Assert.AreEqual(startTimeUtc.Add(TimeSpan.FromDays(2)), actual);
+        Assert.That(actual, Is.Not.Null);
+        Assert.That(actual, Is.EqualTo(startTimeUtc.Add(TimeSpan.FromDays(2))));
     }
 
     [Test]
@@ -329,7 +327,7 @@ public class SimpleTriggerImplTest
 
         var actual = trigger.GetFireTimeAfter(afterTimeUtc);
 
-        Assert.IsNull(actual);
+        Assert.That(actual, Is.Null);
     }
 
     [Test]
@@ -350,8 +348,8 @@ public class SimpleTriggerImplTest
 
         var actual = trigger.GetFireTimeAfter(afterTimeUtc);
 
-        Assert.IsNotNull(actual);
-        Assert.AreEqual(startTimeUtc.AddDays(2), actual);
+        Assert.That(actual, Is.Not.Null);
+        Assert.That(actual, Is.EqualTo(startTimeUtc.AddDays(2)));
     }
 
     [Test]
@@ -372,6 +370,6 @@ public class SimpleTriggerImplTest
 
         var actual = trigger.GetFireTimeAfter(afterTimeUtc);
 
-        Assert.IsNull(actual);
+        Assert.That(actual, Is.Null);
     }
 }

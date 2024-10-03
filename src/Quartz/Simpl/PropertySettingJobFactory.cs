@@ -21,7 +21,7 @@ using System.Reflection;
 
 using Microsoft.Extensions.Logging;
 
-using Quartz.Logging;
+using Quartz.Diagnostics;
 using Quartz.Spi;
 using Quartz.Util;
 
@@ -135,9 +135,16 @@ public class PropertySettingJobFactory : SimpleJobFactory
     /// <param name="data">The data to set.</param>
     public virtual void SetObjectProperties(object obj, JobDataMap data)
     {
-        foreach (string name in data.Keys)
+        if (obj is IJobWrapper jobWrapper)
         {
-            SetObjectProperty(obj, name, data[name]);
+            SetObjectProperties(jobWrapper.Target, data);
+        }
+        else
+        {
+            foreach (string name in data.Keys)
+            {
+                SetObjectProperty(obj, name, data[name]);
+            }
         }
     }
 
@@ -162,7 +169,7 @@ public class PropertySettingJobFactory : SimpleJobFactory
         Type? paramType = null;
         try
         {
-            if (prop == null)
+            if (prop is null)
             {
                 HandleError($"No property on Job class {job.GetType()} for property '{name}'");
                 return;
@@ -170,7 +177,7 @@ public class PropertySettingJobFactory : SimpleJobFactory
 
             paramType = prop.PropertyType;
 
-            if (o == null && (paramType.IsPrimitive || paramType.IsEnum))
+            if (o is null && (paramType.IsPrimitive || paramType.IsEnum))
             {
                 // cannot set null to these
                 HandleError($"Cannot set null to property on Job class {job.GetType()} for property '{name}'");
@@ -228,7 +235,8 @@ public class PropertySettingJobFactory : SimpleJobFactory
 
         if (WarnIfPropertyNotFound)
         {
-            if (e == null)
+#pragma warning disable CA2254
+            if (e is null)
             {
                 logger.LogWarning(message);
             }
@@ -236,6 +244,7 @@ public class PropertySettingJobFactory : SimpleJobFactory
             {
                 logger.LogWarning(e, message);
             }
+#pragma warning restore CA2254
         }
     }
 }

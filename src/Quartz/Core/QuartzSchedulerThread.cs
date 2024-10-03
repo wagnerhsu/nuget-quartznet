@@ -23,9 +23,7 @@ using System.Data.Common;
 
 using Microsoft.Extensions.Logging;
 
-using Quartz.Impl.AdoJobStore;
-using Quartz.Logging;
-using Quartz.Simpl;
+using Quartz.Diagnostics;
 using Quartz.Spi;
 
 using LogLevel = Microsoft.Extensions.Logging.LogLevel;
@@ -54,8 +52,6 @@ internal sealed class QuartzSchedulerThread
     private bool paused;
     private bool halted;
 
-    private readonly QuartzRandom random = new QuartzRandom();
-
     private CancellationTokenSource cancellationTokenSource = null!;
     private Task task = null!;
 
@@ -65,7 +61,7 @@ internal sealed class QuartzSchedulerThread
     /// <value>The randomized idle wait time.</value>
     private TimeSpan GetRandomizedIdleWaitTime()
     {
-        return qsRsrcs.IdleWaitTime - TimeSpan.FromMilliseconds(random.Next(idleWaitVariableness));
+        return qsRsrcs.IdleWaitTime - TimeSpan.FromMilliseconds(QuartzRandom.Next(idleWaitVariableness));
     }
 
     /// <summary>
@@ -268,7 +264,7 @@ internal sealed class QuartzSchedulerThread
                 {
                     List<IOperableTrigger> triggers;
 
-                    DateTimeOffset now = SystemTime.UtcNow();
+                    DateTimeOffset now = qsRsrcs.TimeProvider.GetUtcNow();
 
                     ClearSignaledSchedulingChange();
                     try
@@ -310,9 +306,9 @@ internal sealed class QuartzSchedulerThread
                         continue;
                     }
 
-                    if (triggers != null && triggers.Count > 0)
+                    if (triggers is not null && triggers.Count > 0)
                     {
-                        now = SystemTime.UtcNow();
+                        now = qsRsrcs.TimeProvider.GetUtcNow();
                         DateTimeOffset triggerTime = triggers[0].GetNextFireTimeUtc()!.Value;
                         TimeSpan timeUntilTrigger = triggerTime - now;
 
@@ -334,7 +330,7 @@ internal sealed class QuartzSchedulerThread
                                     {
                                         // we could have blocked a long while
                                         // on 'synchronize', so we must recompute
-                                        now = SystemTime.UtcNow();
+                                        now = qsRsrcs.TimeProvider.GetUtcNow();
                                         timeUntilTrigger = triggerTime - now;
                                         if (timeUntilTrigger > TimeSpan.Zero)
                                         {
@@ -350,7 +346,7 @@ internal sealed class QuartzSchedulerThread
                             {
                                 break;
                             }
-                            now = SystemTime.UtcNow();
+                            now = qsRsrcs.TimeProvider.GetUtcNow();
                             timeUntilTrigger = triggerTime - now;
                         }
 
@@ -374,7 +370,7 @@ internal sealed class QuartzSchedulerThread
                             try
                             {
                                 var res = await qsRsrcs.JobStore.TriggersFired(triggers, CancellationToken.None).ConfigureAwait(false);
-                                if (res != null)
+                                if (res is not null)
                                 {
                                     bndles = res.ToList();
                                 }
@@ -401,7 +397,7 @@ internal sealed class QuartzSchedulerThread
 
                             IOperableTrigger trigger = triggers[i];
                             // TODO SQL exception?
-                            if (exception != null && (exception is DbException || exception.InnerException is DbException))
+                            if (exception is not null && (exception is DbException || exception.InnerException is DbException))
                             {
                                 logger.LogError(exception, "DbException while firing trigger {Trigger}", trigger);
                                 await qsRsrcs.JobStore.ReleaseAcquiredTrigger(trigger, CancellationToken.None).ConfigureAwait(false);
@@ -411,7 +407,7 @@ internal sealed class QuartzSchedulerThread
                             // it's possible to get 'null' if the triggers was paused,
                             // blocked, or other similar occurrences that prevent it being
                             // fired at this time...  or if the scheduler was shutdown (halted)
-                            if (bndle == null)
+                            if (bndle is null)
                             {
                                 await qsRsrcs.JobStore.ReleaseAcquiredTrigger(trigger, CancellationToken.None).ConfigureAwait(false);
                                 continue;
@@ -437,7 +433,7 @@ internal sealed class QuartzSchedulerThread
                             }
 
                             var threadPoolRunResult = qsRsrcs.ThreadPool.RunInThread(() => shell.Run(CancellationToken.None));
-                            if (threadPoolRunResult == false)
+                            if (!threadPoolRunResult)
                             {
                                 // this case should never happen, as it is indicative of the
                                 // scheduler being shutdown or a bug in the thread pool or
@@ -494,15 +490,7 @@ internal sealed class QuartzSchedulerThread
         var delay = TimeSpan.FromMilliseconds(100);
         try
         {
-            // TODO v4, use interface
-            if (jobStore is JobStoreSupport jobStoreSupport)
-            {
-                delay = jobStoreSupport.GetAcquireRetryDelay(acquiresFailed);
-            }
-            else if (jobStore is RAMJobStore ramJobStore)
-            {
-                delay = ramJobStore.GetAcquireRetryDelay(acquiresFailed);
-            }
+            delay = jobStore.GetAcquireRetryDelay(acquiresFailed);
         }
         catch
         {
@@ -581,7 +569,7 @@ internal sealed class QuartzSchedulerThread
             if (earlier)
             {
                 // so the new time is considered earlier, but is it enough earlier?
-                TimeSpan diff = oldTimeUtc - SystemTime.UtcNow();
+                TimeSpan diff = oldTimeUtc - qsRsrcs.TimeProvider.GetUtcNow();
                 if (diff < (qsRsrcs.JobStore.SupportsPersistence ? TimeSpan.FromMilliseconds(70) : TimeSpan.FromMilliseconds(7)))
                 {
                     earlier = false;

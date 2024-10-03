@@ -5,7 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 
-using Quartz.Logging;
+using Quartz.Diagnostics;
 using Quartz.Simpl;
 using Quartz.Spi;
 
@@ -100,7 +100,7 @@ internal sealed class ServiceCollectionQuartzConfigurator : IServiceCollectionQu
     {
         schedulerBuilder.UseJobFactory<T>();
         services.Replace(ServiceDescriptor.Singleton(typeof(IJobFactory), typeof(T)));
-        if (configure != null)
+        if (configure is not null)
         {
             services.Configure<QuartzOptions>(options =>
             {

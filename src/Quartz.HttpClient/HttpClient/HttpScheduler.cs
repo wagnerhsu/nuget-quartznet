@@ -21,13 +21,13 @@ public class HttpScheduler : IScheduler
         SchedulerName = schedulerName;
 
         this.httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
-        if (!this.httpClient.BaseAddress?.ToString().EndsWith("/") == true)
+        if (!this.httpClient.BaseAddress?.ToString().EndsWith('/') == true)
         {
             throw new ArgumentException("HttpClient's BaseAddress must end in /", nameof(httpClient));
         }
 
         this.jsonSerializerOptions = jsonSerializerOptions ?? new JsonSerializerOptions(JsonSerializerDefaults.Web);
-        this.jsonSerializerOptions.AddQuartzConverters();
+        this.jsonSerializerOptions.AddQuartzConverters(newtonsoftCompatibilityMode: false);
     }
 
     public string SchedulerName { get; }
@@ -41,7 +41,9 @@ public class HttpScheduler : IScheduler
     {
         get
         {
-            var dto = httpClient.Get<SchedulerContextDto>($"{SchedulerEndpointUrl()}/context", jsonSerializerOptions, CancellationToken.None).GetAwaiter().GetResult();
+            var dto = httpClient.Get<SchedulerContextDto>($"{SchedulerEndpointUrl()}/context", jsonSerializerOptions, CancellationToken.None)
+                .AsTask().GetAwaiter().GetResult();
+
             return dto.AsContext();
         }
     }
@@ -106,7 +108,7 @@ public class HttpScheduler : IScheduler
         return metadata;
     }
 
-    public async ValueTask<IReadOnlyCollection<IJobExecutionContext>> GetCurrentlyExecutingJobs(CancellationToken cancellationToken = default)
+    public async ValueTask<List<IJobExecutionContext>> GetCurrentlyExecutingJobs(CancellationToken cancellationToken = default)
     {
         var dtos = await httpClient.Get<CurrentlyExecutingJobDto[]>($"{JobEndpointUrl()}/currently-executing", jsonSerializerOptions, cancellationToken).ConfigureAwait(false);
 
@@ -114,7 +116,7 @@ public class HttpScheduler : IScheduler
         foreach (var dto in dtos)
         {
             var (context, errorReason) = dto.AsIJobExecutionContext(this);
-            if (context == null)
+            if (context is null)
             {
                 throw new HttpClientException("Could not create IJobExecutionContext from CurrentlyExecutingJobDto: " + errorReason);
             }
@@ -125,19 +127,19 @@ public class HttpScheduler : IScheduler
         return result;
     }
 
-    public async ValueTask<IReadOnlyCollection<string>> GetJobGroupNames(CancellationToken cancellationToken = default)
+    public async ValueTask<List<string>> GetJobGroupNames(CancellationToken cancellationToken = default)
     {
         var result = await httpClient.Get<NamesDto>($"{JobEndpointUrl()}/groups", jsonSerializerOptions, cancellationToken).ConfigureAwait(false);
         return result.Names;
     }
 
-    public async ValueTask<IReadOnlyCollection<string>> GetTriggerGroupNames(CancellationToken cancellationToken = default)
+    public async ValueTask<List<string>> GetTriggerGroupNames(CancellationToken cancellationToken = default)
     {
         var result = await httpClient.Get<NamesDto>($"{TriggerEndpointUrl()}/groups", jsonSerializerOptions, cancellationToken).ConfigureAwait(false);
         return result.Names;
     }
 
-    public async ValueTask<IReadOnlyCollection<string>> GetPausedTriggerGroups(CancellationToken cancellationToken = default)
+    public async ValueTask<List<string>> GetPausedTriggerGroups(CancellationToken cancellationToken = default)
     {
         var result = await httpClient.Get<NamesDto>($"{TriggerEndpointUrl()}/groups/paused", jsonSerializerOptions, cancellationToken).ConfigureAwait(false);
         return result.Names;
@@ -171,10 +173,7 @@ public class HttpScheduler : IScheduler
 
     public ValueTask<DateTimeOffset> ScheduleJob(IJobDetail jobDetail, ITrigger trigger, CancellationToken cancellationToken = default)
     {
-        if (jobDetail == null)
-        {
-            throw new ArgumentNullException(nameof(jobDetail));
-        }
+        ArgumentNullException.ThrowIfNull(jobDetail);
 
         return DoScheduleJob(jobDetail, trigger, cancellationToken);
     }
@@ -186,12 +185,9 @@ public class HttpScheduler : IScheduler
 
     private async ValueTask<DateTimeOffset> DoScheduleJob(IJobDetail? jobDetail, ITrigger trigger, CancellationToken cancellationToken)
     {
-        if (trigger == null)
-        {
-            throw new ArgumentNullException(nameof(trigger));
-        }
+        ArgumentNullException.ThrowIfNull(trigger);
 
-        var jobDetailsDto = jobDetail != null ? JobDetailDto.Create(jobDetail) : null;
+        var jobDetailsDto = jobDetail is not null ? JobDetailDto.Create(jobDetail) : null;
         var result = await httpClient.PostWithResponse<ScheduleJobRequest, ScheduleJobResponse>(
             $"{TriggerEndpointUrl()}/schedule",
             new ScheduleJobRequest(trigger, jobDetailsDto),
@@ -204,10 +200,7 @@ public class HttpScheduler : IScheduler
 
     public ValueTask ScheduleJobs(IReadOnlyDictionary<IJobDetail, IReadOnlyCollection<ITrigger>> triggersAndJobs, bool replace, CancellationToken cancellationToken = default)
     {
-        if (triggersAndJobs == null)
-        {
-            throw new ArgumentNullException(nameof(triggersAndJobs));
-        }
+        ArgumentNullException.ThrowIfNull(triggersAndJobs);
 
         var requestItems = triggersAndJobs.Select(CreateRequestItem).ToArray();
         var request = new ScheduleJobsRequest(requestItems, replace);
@@ -244,10 +237,7 @@ public class HttpScheduler : IScheduler
 
     public async ValueTask<bool> UnscheduleJobs(IReadOnlyCollection<TriggerKey> triggerKeys, CancellationToken cancellationToken = default)
     {
-        if (triggerKeys == null)
-        {
-            throw new ArgumentNullException(nameof(triggerKeys));
-        }
+        ArgumentNullException.ThrowIfNull(triggerKeys);
 
         var result = await httpClient.PostWithResponse<UnscheduleJobsRequest, UnscheduleJobsResponse>(
             $"{TriggerEndpointUrl()}/unschedule",
@@ -261,10 +251,7 @@ public class HttpScheduler : IScheduler
 
     public async ValueTask<DateTimeOffset?> RescheduleJob(TriggerKey triggerKey, ITrigger newTrigger, CancellationToken cancellationToken = default)
     {
-        if (newTrigger == null)
-        {
-            throw new ArgumentNullException(nameof(newTrigger));
-        }
+        ArgumentNullException.ThrowIfNull(newTrigger);
 
         var result = await httpClient.PostWithResponse<RescheduleJobRequest, RescheduleJobResponse>(
             $"{TriggerEndpointUrl(triggerKey)}/reschedule",
@@ -306,10 +293,7 @@ public class HttpScheduler : IScheduler
 
     public async ValueTask<bool> DeleteJobs(IReadOnlyCollection<JobKey> jobKeys, CancellationToken cancellationToken = default)
     {
-        if (jobKeys == null)
-        {
-            throw new ArgumentNullException(nameof(jobKeys));
-        }
+        ArgumentNullException.ThrowIfNull(jobKeys);
 
         var result = await httpClient.PostWithResponse<DeleteJobsRequest, DeleteJobsResponse>(
             $"{JobEndpointUrl()}/delete",
@@ -328,10 +312,7 @@ public class HttpScheduler : IScheduler
 
     public ValueTask TriggerJob(JobKey jobKey, JobDataMap data, CancellationToken cancellationToken = default)
     {
-        if (data == null)
-        {
-            throw new ArgumentNullException(nameof(data));
-        }
+        ArgumentNullException.ThrowIfNull(data);
 
         var request = new TriggerJobRequest(data);
         return httpClient.Post($"{JobEndpointUrl(jobKey)}/trigger", request, jsonSerializerOptions, cancellationToken);
@@ -391,36 +372,36 @@ public class HttpScheduler : IScheduler
         return httpClient.Post($"{SchedulerEndpointUrl()}/resume-all", jsonSerializerOptions, cancellationToken);
     }
 
-    public async ValueTask<IReadOnlyCollection<JobKey>> GetJobKeys(GroupMatcher<JobKey> matcher, CancellationToken cancellationToken = default)
+    public async ValueTask<List<JobKey>> GetJobKeys(GroupMatcher<JobKey> matcher, CancellationToken cancellationToken = default)
     {
         var urlParams = matcher.ToUrlParameters();
         var result = await httpClient.Get<KeyDto[]>($"{JobEndpointUrl()}?{urlParams}", jsonSerializerOptions, cancellationToken).ConfigureAwait(false);
-        return result.Select(x => x.AsJobKey()).ToArray();
+        return result.Select(x => x.AsJobKey()).ToList();
     }
 
-    public async ValueTask<IReadOnlyCollection<ITrigger>> GetTriggersOfJob(JobKey jobKey, CancellationToken cancellationToken = default)
+    public async ValueTask<List<ITrigger>> GetTriggersOfJob(JobKey jobKey, CancellationToken cancellationToken = default)
     {
-        var result = await httpClient.Get<ITrigger[]>($"{JobEndpointUrl(jobKey)}/triggers", jsonSerializerOptions, cancellationToken).ConfigureAwait(false);
+        var result = await httpClient.Get<List<ITrigger>>($"{JobEndpointUrl(jobKey)}/triggers", jsonSerializerOptions, cancellationToken).ConfigureAwait(false);
         return result;
     }
 
-    public async ValueTask<IReadOnlyCollection<TriggerKey>> GetTriggerKeys(GroupMatcher<TriggerKey> matcher, CancellationToken cancellationToken = default)
+    public async ValueTask<List<TriggerKey>> GetTriggerKeys(GroupMatcher<TriggerKey> matcher, CancellationToken cancellationToken = default)
     {
         var urlParams = matcher.ToUrlParameters();
         var result = await httpClient.Get<KeyDto[]>($"{TriggerEndpointUrl()}?{urlParams}", jsonSerializerOptions, cancellationToken).ConfigureAwait(false);
-        return result.Select(x => x.AsTriggerKey()).ToArray();
+        return result.Select(x => x.AsTriggerKey()).ToList();
     }
 
     public async ValueTask<IJobDetail?> GetJobDetail(JobKey jobKey, CancellationToken cancellationToken = default)
     {
         var result = await httpClient.GetWithNullForNotFound<JobDetailDto>($"{JobEndpointUrl(jobKey)}", jsonSerializerOptions, cancellationToken).ConfigureAwait(false);
-        if (result == null)
+        if (result is null)
         {
             return null;
         }
 
         var (jobDetail, errorReason) = result.AsIJobDetail();
-        if (jobDetail == null)
+        if (jobDetail is null)
         {
             throw new HttpClientException("Could not create IJobDetail from JobDetailDto: " + errorReason);
         }
@@ -452,10 +433,7 @@ public class HttpScheduler : IScheduler
             throw new ArgumentException("Calendar name required", nameof(calName));
         }
 
-        if (calendar == null)
-        {
-            throw new ArgumentNullException(nameof(calendar));
-        }
+        ArgumentNullException.ThrowIfNull(calendar);
 
         var requestContent = new AddCalendarRequest(calName, calendar, replace, updateTriggers);
         return httpClient.Post(CalendarEndpointUrl(), requestContent, jsonSerializerOptions, cancellationToken);
@@ -472,7 +450,7 @@ public class HttpScheduler : IScheduler
         return httpClient.GetWithNullForNotFound<ICalendar>(CalendarEndpointUrl(calName), jsonSerializerOptions, cancellationToken);
     }
 
-    public async ValueTask<IReadOnlyCollection<string>> GetCalendarNames(CancellationToken cancellationToken = default)
+    public async ValueTask<List<string>> GetCalendarNames(CancellationToken cancellationToken = default)
     {
         var result = await httpClient.Get<NamesDto>(CalendarEndpointUrl(), jsonSerializerOptions, cancellationToken).ConfigureAwait(false);
         return result.Names;
@@ -535,7 +513,7 @@ public class HttpScheduler : IScheduler
 
     private string JobEndpointUrl(JobKey job)
     {
-        if (job == null)
+        if (job is null)
         {
             throw new ArgumentNullException(nameof(job), "JobKey required");
         }
@@ -547,7 +525,7 @@ public class HttpScheduler : IScheduler
 
     private string TriggerEndpointUrl(TriggerKey trigger)
     {
-        if (trigger == null)
+        if (trigger is null)
         {
             throw new ArgumentNullException(nameof(trigger), "TriggerKey required");
         }
@@ -557,7 +535,9 @@ public class HttpScheduler : IScheduler
 
     private SchedulerDto GetSchedulerDetailsSync()
     {
+#pragma warning disable CA2012
         var schedulerDto = GetSchedulerDetails(CancellationToken.None).ConfigureAwait(false).GetAwaiter().GetResult();
+#pragma warning restore CA2012
         return schedulerDto;
     }
 

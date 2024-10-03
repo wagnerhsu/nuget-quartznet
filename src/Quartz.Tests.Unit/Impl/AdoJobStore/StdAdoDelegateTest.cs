@@ -27,8 +27,6 @@ using FakeItEasy;
 
 using Microsoft.Data.SqlClient;
 
-using NUnit.Framework;
-
 using Quartz.Impl.AdoJobStore;
 using Quartz.Impl.AdoJobStore.Common;
 using Quartz.Simpl;
@@ -38,8 +36,8 @@ using Quartz.Util;
 namespace Quartz.Tests.Unit.Impl.AdoJobStore;
 
 /// <author>Marko Lahma (.NET)</author>
-[TestFixture(typeof(BinaryObjectSerializer))]
-[TestFixture(typeof(JsonObjectSerializer))]
+[TestFixture(typeof(NewtonsoftJsonObjectSerializer))]
+[TestFixture(typeof(SystemTextJsonObjectSerializer))]
 public class StdAdoDelegateTest
 {
     private readonly IObjectSerializer serializer;
@@ -53,8 +51,6 @@ public class StdAdoDelegateTest
     [Test]
     public void TestSerializeJobData()
     {
-        bool binary = serializer.GetType() == typeof(BinaryObjectSerializer);
-
         var args = new DelegateInitializationArgs();
         args.TablePrefix = "QRTZ_";
         args.InstanceName = "TESTSCHED";
@@ -82,27 +78,14 @@ public class StdAdoDelegateTest
         try
         {
             del.SerializeJobData(jdm);
-            if (binary)
-            {
-                Assert.Fail("Private types should not be serializable by binary serialization");
-            }
         }
         catch (SerializationException e)
         {
-            if (binary)
-            {
-                Assert.IsTrue(e.Message.IndexOf("key3", StringComparison.Ordinal) >= 0);
-            }
-            else
-            {
-                Assert.Fail($"Private types should be serializable when not using binary serialization: {e}");
-            }
+            Assert.Fail($"Private types should be serializable when not using binary serialization: {e}");
         }
     }
 
-    private class NonSerializableTestClass
-    {
-    }
+    private class NonSerializableTestClass;
 
     [Test]
     public async Task TestSelectBlobTriggerWithNoBlobContent()
@@ -295,14 +278,17 @@ public class StdAdoDelegateTest
             new SimpleTypeLoadHelper(), // Irrelevant, not used actually by method implementation
             CancellationToken.None);
 
-        Assert.IsNotNull(jobDetail);
-        Assert.AreEqual(jobName, jobDetail.Key.Name);
-        Assert.AreEqual(jobGroup, jobDetail.Key.Group);
-        Assert.AreEqual(jobDescription, jobDetail.Description);
-        Assert.AreEqual(typeof(TestJob), jobDetail.JobType.Type);
-        Assert.IsTrue(jobDetail.RequestsRecovery);
-        Assert.IsTrue(jobDetail.Durable);
-        Assert.IsTrue(jobDetail.ConcurrentExecutionDisallowed);
+        Assert.Multiple(() =>
+        {
+            Assert.That(jobDetail, Is.Not.Null);
+            Assert.That(jobDetail.Key.Name, Is.EqualTo(jobName));
+            Assert.That(jobDetail.Key.Group, Is.EqualTo(jobGroup));
+            Assert.That(jobDetail.Description, Is.EqualTo(jobDescription));
+            Assert.That(jobDetail.JobType.Type, Is.EqualTo(typeof(TestJob)));
+            Assert.That(jobDetail.RequestsRecovery, Is.True);
+            Assert.That(jobDetail.Durable, Is.True);
+            Assert.That(jobDetail.ConcurrentExecutionDisallowed, Is.True);
+        });
 
         var expectedCommandText = "SELECT "
                                   + "JOB_NAME,"
@@ -318,7 +304,7 @@ public class StdAdoDelegateTest
                                   + "WHERE SCHED_NAME = @schedulerName "
                                   + "AND JOB_NAME = @jobName "
                                   + "AND JOB_GROUP = @jobGroup";
-        Assert.AreEqual(expectedCommandText, command.CommandText);
+        Assert.That(command.CommandText, Is.EqualTo(expectedCommandText));
     }
 
     private class TestJob : IJob
@@ -477,14 +463,6 @@ public class StubParameterCollection : DbParameterCollection
 
     public override object SyncRoot => throw new NotImplementedException();
 
-#if NETFRAMEWORK
-    public override bool IsFixedSize => throw new NotImplementedException();
-
-    public override bool IsReadOnly => throw new NotImplementedException();
-
-    public override bool IsSynchronized => throw new NotImplementedException();
-#endif
-
     public override int IndexOf(string parameterName)
     {
         throw new NotImplementedException();
@@ -519,6 +497,4 @@ public class StubParameterCollection : DbParameterCollection
     }
 }
 
-internal class TestTriggerPersistenceDelegate : SimpleTriggerPersistenceDelegate
-{
-}
+internal class TestTriggerPersistenceDelegate : SimpleTriggerPersistenceDelegate;

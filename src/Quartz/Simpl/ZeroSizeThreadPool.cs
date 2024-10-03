@@ -21,7 +21,7 @@
 
 using Microsoft.Extensions.Logging;
 
-using Quartz.Logging;
+using Quartz.Diagnostics;
 using Quartz.Spi;
 
 namespace Quartz.Simpl;
@@ -61,8 +61,6 @@ public sealed class ZeroSizeThreadPool : IThreadPool
     /// </summary>
     /// <value>The size of the pool.</value>
     public int PoolSize => 0;
-
-    public int AvailableThreadCount => 0;
 
     /// <summary>
     /// Inform the <see cref="IThreadPool" /> of the Scheduler instance's Id,

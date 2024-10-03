@@ -1,8 +1,11 @@
-using NUnit.Framework;
+using System.Text.Json;
 
 using Quartz.Impl;
 using Quartz.Impl.Matchers;
 using Quartz.Impl.Triggers;
+using Quartz.Serialization.Json;
+using Quartz.Serialization.Json.Triggers;
+using Quartz.Spi;
 
 namespace Quartz.Tests.Integration;
 
@@ -76,7 +79,6 @@ public abstract class AbstractSchedulerTest
     protected abstract ValueTask<IScheduler> CreateScheduler(string name, int threadPoolSize);
 
     [Test]
-    [Category("db-sqlserver")]
     public async Task TestBasicStorageFunctions()
     {
         IScheduler sched = await CreateScheduler("testBasicStorageFunctions", 2);
@@ -240,7 +242,6 @@ public abstract class AbstractSchedulerTest
     }
 
     [Test]
-    [Category("db-sqlserver")]
     public async Task TestUpdatingTriggerTypes()
     {
         var sched = await CreateScheduler("testUpdatingTriggerTypes", 2);
@@ -288,7 +289,6 @@ public abstract class AbstractSchedulerTest
         var cronTrigger = (CronTriggerImpl) trigger;
         Assert.That(cronTrigger.CronExpressionString, Is.EqualTo("0/5 * * * * ?"));
 
-
         var blobTrigger = new TestBlobCronTriggerImpl
         {
             StartTimeUtc = DateTimeOffset.UtcNow,
@@ -304,7 +304,6 @@ public abstract class AbstractSchedulerTest
         Assert.That(trigger, Is.InstanceOf<TestBlobCronTriggerImpl>());
         blobTrigger = (TestBlobCronTriggerImpl) trigger;
         Assert.That(blobTrigger.CronExpressionString, Is.EqualTo("0/10 * * * * ?"));
-
 
         trigger = TriggerBuilder.Create()
             .WithIdentity("t1")
@@ -472,9 +471,8 @@ public abstract class AbstractSchedulerTest
     [Test]
     public async Task TestDurableStorageFunctions()
     {
-        var schedulerName = CreateSchedulerName("testDurableStorageFunctions");
-        SchedulerRepository.Instance.Remove(schedulerName); // workaround prior test cleanup - relates to issue in #1453
-        IScheduler sched = await CreateScheduler(schedulerName, 2);
+        SchedulerRepository.Instance.Remove(CreateSchedulerName("testDurableStorageFunctions")); // workaround prior test cleanup - relates to issue in #1453
+        IScheduler sched = await CreateScheduler("testDurableStorageFunctions", 2);
         await sched.Clear();
 
         // test basic storage functions of scheduler...
@@ -586,5 +584,36 @@ public abstract class AbstractSchedulerTest
     public class TestBlobCronTriggerImpl : CronTriggerImpl
     {
         public override bool HasAdditionalProperties => true;
+
+        public sealed class SystemTextJsonSerializer : TriggerSerializer<TestBlobCronTriggerImpl>
+        {
+            public override string TriggerTypeForJson => "TestBlobCronTrigger";
+
+            public override IScheduleBuilder CreateScheduleBuilder(JsonElement jsonElement, JsonSerializerOptions options)
+            {
+                var cronExpressionString = jsonElement.GetProperty("CronExpressionString").GetString()!;
+                var timeZone = jsonElement.GetProperty("TimeZone").GetTimeZone();
+
+                var trigger = new TestBlobCronTriggerImpl
+                {
+                    CronExpression = new CronExpression(cronExpressionString),
+                    TimeZone = timeZone,
+                    MisfireInstruction = Quartz.MisfireInstruction.SmartPolicy
+                };
+
+                return new StaticScheduleBuilder(trigger);
+            }
+
+            protected override void SerializeFields(Utf8JsonWriter writer, TestBlobCronTriggerImpl trigger, JsonSerializerOptions options)
+            {
+                writer.WriteString("CronExpressionString", trigger.CronExpressionString);
+                writer.WriteTimeZoneInfo("TimeZone", trigger.TimeZone);
+            }
+
+            private sealed class StaticScheduleBuilder(IMutableTrigger trigger) : IScheduleBuilder
+            {
+                public IMutableTrigger Build() => trigger;
+            }
+        }
     }
 }

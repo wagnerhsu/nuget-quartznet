@@ -19,7 +19,7 @@
 
 using Microsoft.Extensions.Logging;
 
-using Quartz.Logging;
+using Quartz.Diagnostics;
 using Quartz.Spi;
 
 namespace Quartz.Core;
@@ -81,11 +81,12 @@ internal sealed class SchedulerSignalerImpl : ISchedulerSignaler
     /// <summary>
     /// Signals the scheduling change.
     /// </summary>
-    public void SignalSchedulingChange(
+    public ValueTask SignalSchedulingChange(
         DateTimeOffset? candidateNewNextFireTime,
         CancellationToken cancellationToken = default)
     {
         schedThread.SignalSchedulingChange(candidateNewNextFireTime);
+        return default;
     }
 
     public ValueTask NotifySchedulerListenersJobDeleted(

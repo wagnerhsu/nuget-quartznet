@@ -1,4 +1,4 @@
-#region License
+﻿#region License
 
 /*
  * All content copyright Marko Lahma, unless otherwise indicated. All rights reserved.
@@ -24,7 +24,7 @@ using System.Data.Common;
 
 using Microsoft.Extensions.Logging;
 
-using Quartz.Logging;
+using Quartz.Diagnostics;
 
 namespace Quartz.Impl.AdoJobStore;
 
@@ -60,19 +60,19 @@ public sealed class ConnectionAndTransactionHolder : IDisposable
         cmd.Transaction = transaction;
     }
 
-    public void Commit(bool openNewTransaction)
+    public async ValueTask Commit(bool openNewTransaction)
     {
-        if (transaction != null)
+        if (transaction is not null)
         {
             try
             {
                 CheckNotZombied();
                 IsolationLevel il = transaction.IsolationLevel;
-                transaction.Commit();
+                await transaction.CommitAsync().ConfigureAwait(false);
                 if (openNewTransaction)
                 {
                     // open new transaction to go with
-                    transaction = connection.BeginTransaction(il);
+                    transaction = await connection.BeginTransactionAsync(il).ConfigureAwait(false);
                 }
             }
             catch (Exception e)
@@ -82,11 +82,11 @@ public sealed class ConnectionAndTransactionHolder : IDisposable
         }
     }
 
-    public void Close()
+    public async ValueTask Close()
     {
         try
         {
-            connection.Close();
+            await connection.CloseAsync().ConfigureAwait(false);
         }
         catch (Exception e)
         {
@@ -124,13 +124,13 @@ public sealed class ConnectionAndTransactionHolder : IDisposable
         set
         {
             DateTimeOffset? sigTime = sigChangeForTxCompletion;
-            if (sigChangeForTxCompletion == null && value.HasValue)
+            if (sigChangeForTxCompletion is null && value.HasValue)
             {
                 sigChangeForTxCompletion = value;
             }
             else
             {
-                if (sigChangeForTxCompletion == null || value < sigTime)
+                if (sigChangeForTxCompletion is null || value < sigTime)
                 {
                     sigChangeForTxCompletion = value;
                 }
@@ -138,14 +138,14 @@ public sealed class ConnectionAndTransactionHolder : IDisposable
         }
     }
 
-    public void Rollback(bool transientError)
+    public async ValueTask Rollback(bool transientError)
     {
-        if (transaction != null)
+        if (transaction is not null)
         {
             try
             {
                 CheckNotZombied();
-                transaction.Rollback();
+                await transaction.RollbackAsync().ConfigureAwait(false);
             }
             catch (Exception e)
             {
@@ -166,7 +166,7 @@ public sealed class ConnectionAndTransactionHolder : IDisposable
 
     private void CheckNotZombied()
     {
-        if (transaction != null && transaction.Connection == null)
+        if (transaction is not null && transaction.Connection is null)
         {
             ThrowHelper.ThrowInvalidOperationException("Transaction not connected, or was disconnected");
         }

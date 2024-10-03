@@ -24,8 +24,7 @@ using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
 
 using Quartz.Impl.AdoJobStore.Common;
-using Quartz.Logging;
-using Quartz.Util;
+using Quartz.Diagnostics;
 
 using LogLevel = Microsoft.Extensions.Logging.LogLevel;
 
@@ -178,7 +177,7 @@ public abstract class DBSemaphore : StdAdoConstants, ISemaphore, ITablePrefixAwa
         get => sql;
         set
         {
-            if (!value.IsNullOrWhiteSpace())
+            if (!string.IsNullOrWhiteSpace(value))
             {
                 sql = value.Trim();
             }
@@ -191,7 +190,7 @@ public abstract class DBSemaphore : StdAdoConstants, ISemaphore, ITablePrefixAwa
     {
         set
         {
-            if (!value.IsNullOrWhiteSpace())
+            if (!string.IsNullOrWhiteSpace(value))
             {
                 insertSql = value.Trim();
             }
@@ -202,7 +201,7 @@ public abstract class DBSemaphore : StdAdoConstants, ISemaphore, ITablePrefixAwa
 
     private void SetExpandedSql()
     {
-        if (TablePrefix != null && sql != null && insertSql != null)
+        if (TablePrefix is not null && sql is not null && insertSql is not null)
         {
             expandedSQL = AdoJobStoreUtil.ReplaceTablePrefix(sql, TablePrefix);
             expandedInsertSQL = AdoJobStoreUtil.ReplaceTablePrefix(insertSql, TablePrefix);

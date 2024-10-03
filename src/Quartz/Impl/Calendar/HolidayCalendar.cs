@@ -126,10 +126,14 @@ public sealed class HolidayCalendar : BaseCalendar
             return false;
         }
 
-        //apply the timezone
-        timeStampUtc = TimeZoneUtil.ConvertTime(timeStampUtc, TimeZone);
-        DateTime lookFor = timeStampUtc.Date;
+        return IsTimeIncludedThisCalendar(timeStampUtc);
+    }
 
+    private bool IsTimeIncludedThisCalendar(DateTimeOffset timeStampUtc)
+    {
+        // apply the timezone
+        timeStampUtc = TimeZoneUtil.ConvertTime(timeStampUtc, TimeZone);
+        var lookFor = timeStampUtc.Date;
         return !dates.Contains(lookFor);
     }
 
@@ -154,13 +158,18 @@ public sealed class HolidayCalendar : BaseCalendar
 
         // Get timestamp for 00:00:00, with the correct timezone offset
         DateTimeOffset day = new DateTimeOffset(timeUtc.Date, timeUtc.Offset);
-
-        while (!IsTimeIncluded(day))
+        while (!IsTimeIncludedThisCalendar(day) || !base.IsTimeIncluded(timeUtc))
         {
             day = day.AddDays(1);
+            timeUtc = timeUtc.AddDays(1);
+            //ensure earliest value is assigned to return value
+            if (day < timeUtc)
+            {
+                timeUtc = day;
+            }
         }
 
-        return day;
+        return timeUtc;
     }
 
     /// <summary>
@@ -198,7 +207,7 @@ public sealed class HolidayCalendar : BaseCalendar
     public override int GetHashCode()
     {
         int baseHash = 0;
-        if (CalendarBase != null)
+        if (CalendarBase is not null)
         {
             baseHash = CalendarBase.GetHashCode();
         }
@@ -208,12 +217,12 @@ public sealed class HolidayCalendar : BaseCalendar
 
     public bool Equals(HolidayCalendar obj)
     {
-        if (obj == null)
+        if (obj is null)
         {
             return false;
         }
 
-        bool baseEqual = CalendarBase == null || CalendarBase.Equals(obj.CalendarBase);
+        bool baseEqual = CalendarBase is null || CalendarBase.Equals(obj.CalendarBase);
 
         return baseEqual && ExcludedDates.SequenceEqual(obj.ExcludedDates);
     }

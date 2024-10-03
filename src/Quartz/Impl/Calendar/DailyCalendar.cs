@@ -66,9 +66,8 @@ public sealed class DailyCalendar : BaseCalendar
     private const string TwoDigitFormat = "00";
     private const string ThreeDigitFormat = "000";
 
-    // JsonProperty attributes are necessary because no public field/property exposes these directly
-    // Adding RangeStartingTimeUTC and RangeEndingTimeUTC properties with getters/setters to control
-    // these would remove the need for the attribute.
+    private readonly TimeProvider timeProvider;
+
     private int rangeStartingHourOfDay;
     private int rangeStartingMinute;
     private int rangeStartingSecond;
@@ -78,8 +77,9 @@ public sealed class DailyCalendar : BaseCalendar
     private int rangeEndingSecond;
     private int rangeEndingMillis;
 
-    private DailyCalendar()
+    private DailyCalendar(TimeProvider timeProvider)
     {
+        this.timeProvider = timeProvider;
     }
 
     /// <summary>
@@ -115,7 +115,9 @@ public sealed class DailyCalendar : BaseCalendar
     /// </summary>
     /// <param name="rangeStartingTime">The range starting time in millis.</param>
     /// <param name="rangeEndingTime">The range ending time in millis.</param>
-    public DailyCalendar(string rangeStartingTime, string rangeEndingTime)
+    /// <param name="timeProvider">Time provider instance to use, defaults to <see cref="TimeProvider.System"/></param>
+    public DailyCalendar(string rangeStartingTime, string rangeEndingTime, TimeProvider? timeProvider = null)
+        : this(timeProvider ?? TimeProvider.System)
     {
         SetTimeRange(rangeStartingTime, rangeEndingTime);
     }
@@ -157,8 +159,11 @@ public sealed class DailyCalendar : BaseCalendar
     /// information on base calendar functionality.</param>
     /// <param name="rangeStartingTime">The range starting time in millis.</param>
     /// <param name="rangeEndingTime">The range ending time in millis.</param>
-    public DailyCalendar(ICalendar? baseCalendar, string rangeStartingTime, string rangeEndingTime) : base(baseCalendar)
+    /// <param name="timeProvider">Time provider instance to use, defaults to <see cref="TimeProvider.System"/></param>
+    public DailyCalendar(ICalendar? baseCalendar, string rangeStartingTime, string rangeEndingTime, TimeProvider? timeProvider = null)
+        : base(baseCalendar)
     {
+        this.timeProvider = timeProvider ?? TimeProvider.System;
         SetTimeRange(rangeStartingTime, rangeEndingTime);
     }
 
@@ -189,16 +194,20 @@ public sealed class DailyCalendar : BaseCalendar
     /// <param name="rangeEndingMinute">The range ending minute.</param>
     /// <param name="rangeEndingSecond">The range ending second.</param>
     /// <param name="rangeEndingMillis">The range ending millis.</param>
-    public DailyCalendar(int rangeStartingHourOfDay,
+    /// <param name="timeProvider">Time provider instance to use, defaults to <see cref="TimeProvider.System"/></param>
+    public DailyCalendar(
+        int rangeStartingHourOfDay,
         int rangeStartingMinute,
         int rangeStartingSecond,
         int rangeStartingMillis,
         int rangeEndingHourOfDay,
         int rangeEndingMinute,
         int rangeEndingSecond,
-        int rangeEndingMillis)
+        int rangeEndingMillis,
+        TimeProvider? timeProvider = null) : this(timeProvider ?? TimeProvider.System)
     {
-        SetTimeRange(rangeStartingHourOfDay,
+        SetTimeRange(
+            rangeStartingHourOfDay,
             rangeStartingMinute,
             rangeStartingSecond,
             rangeStartingMillis,
@@ -237,7 +246,9 @@ public sealed class DailyCalendar : BaseCalendar
     /// <param name="rangeEndingMinute">The range ending minute.</param>
     /// <param name="rangeEndingSecond">The range ending second.</param>
     /// <param name="rangeEndingMillis">The range ending millis.</param>
-    public DailyCalendar(ICalendar baseCalendar,
+    /// <param name="timeProvider">Time provider instance to use, defaults to <see cref="TimeProvider.System"/></param>
+    public DailyCalendar(
+        ICalendar baseCalendar,
         int rangeStartingHourOfDay,
         int rangeStartingMinute,
         int rangeStartingSecond,
@@ -245,8 +256,10 @@ public sealed class DailyCalendar : BaseCalendar
         int rangeEndingHourOfDay,
         int rangeEndingMinute,
         int rangeEndingSecond,
-        int rangeEndingMillis) : base(baseCalendar)
+        int rangeEndingMillis,
+        TimeProvider? timeProvider = null) : base(baseCalendar)
     {
+        this.timeProvider = timeProvider ?? TimeProvider.System;
         SetTimeRange(rangeStartingHourOfDay,
             rangeStartingMinute,
             rangeStartingSecond,
@@ -280,7 +293,11 @@ public sealed class DailyCalendar : BaseCalendar
     /// </summary>
     /// <param name="rangeStartingCalendarUtc">The range starting calendar.</param>
     /// <param name="rangeEndingCalendarUtc">The range ending calendar.</param>
-    public DailyCalendar(DateTime rangeStartingCalendarUtc, DateTime rangeEndingCalendarUtc)
+    /// <param name="timeProvider">Time provider instance to use, defaults to <see cref="TimeProvider.System"/></param>
+    public DailyCalendar(
+        DateTime rangeStartingCalendarUtc,
+        DateTime rangeEndingCalendarUtc,
+        TimeProvider? timeProvider = null) : this(timeProvider ?? TimeProvider.System)
     {
         SetTimeRange(rangeStartingCalendarUtc, rangeEndingCalendarUtc);
     }
@@ -309,10 +326,14 @@ public sealed class DailyCalendar : BaseCalendar
     /// information on base calendar functionality.</param>
     /// <param name="rangeStartingCalendarUtc">The range starting calendar.</param>
     /// <param name="rangeEndingCalendarUtc">The range ending calendar.</param>
-    public DailyCalendar(ICalendar baseCalendar,
+    /// <param name="timeProvider">Time provider instance to use, defaults to <see cref="TimeProvider.System"/></param>
+    public DailyCalendar(
+        ICalendar baseCalendar,
         DateTime rangeStartingCalendarUtc,
-        DateTime rangeEndingCalendarUtc) : base(baseCalendar)
+        DateTime rangeEndingCalendarUtc,
+        TimeProvider? timeProvider = null) : base(baseCalendar)
     {
+        this.timeProvider = timeProvider ?? TimeProvider.System;
         SetTimeRange(rangeStartingCalendarUtc, rangeEndingCalendarUtc);
     }
 
@@ -336,7 +357,8 @@ public sealed class DailyCalendar : BaseCalendar
     /// </summary>
     /// <param name="rangeStartingTimeInMillis">The range starting time in millis.</param>
     /// <param name="rangeEndingTimeInMillis">The range ending time in millis.</param>
-    public DailyCalendar(long rangeStartingTimeInMillis, long rangeEndingTimeInMillis)
+    /// <param name="timeProvider">Time provider instance to use, defaults to <see cref="TimeProvider.System"/></param>
+    public DailyCalendar(long rangeStartingTimeInMillis, long rangeEndingTimeInMillis, TimeProvider? timeProvider = null) : this(timeProvider ?? TimeProvider.System)
     {
         SetTimeRange(rangeStartingTimeInMillis, rangeEndingTimeInMillis);
     }
@@ -363,12 +385,15 @@ public sealed class DailyCalendar : BaseCalendar
     /// information on base calendar functionality.</param>
     /// <param name="rangeStartingTimeInMillis">The range starting time in millis.</param>
     /// <param name="rangeEndingTimeInMillis">The range ending time in millis.</param>
-    public DailyCalendar(ICalendar baseCalendar,
+    /// <param name="timeProvider">Time provider instance to use, defaults to <see cref="TimeProvider.System"/></param>
+    public DailyCalendar(
+        ICalendar baseCalendar,
         long rangeStartingTimeInMillis,
-        long rangeEndingTimeInMillis) : base(baseCalendar)
+        long rangeEndingTimeInMillis,
+        TimeProvider? timeProvider = null) : base(baseCalendar)
     {
-        SetTimeRange(rangeStartingTimeInMillis,
-            rangeEndingTimeInMillis);
+        this.timeProvider = timeProvider ?? TimeProvider.System;
+        SetTimeRange(rangeStartingTimeInMillis, rangeEndingTimeInMillis);
     }
 
     /// <summary>
@@ -378,6 +403,7 @@ public sealed class DailyCalendar : BaseCalendar
     /// <param name="context"></param>
     private DailyCalendar(SerializationInfo info, StreamingContext context) : base(info, context)
     {
+        this.timeProvider = TimeProvider.System;
         int version;
         try
         {
@@ -437,7 +463,7 @@ public sealed class DailyCalendar : BaseCalendar
     /// <returns></returns>
     public override bool IsTimeIncluded(DateTimeOffset timeUtc)
     {
-        if (CalendarBase != null
+        if (CalendarBase is not null
             && CalendarBase.IsTimeIncluded(timeUtc) == false)
         {
             return false;
@@ -499,7 +525,7 @@ public sealed class DailyCalendar : BaseCalendar
                     nextIncludedTime =
                         GetTimeRangeEndingTimeUtc(nextIncludedTime).AddMilliseconds(OneMillis);
                 }
-                else if (CalendarBase != null &&
+                else if (CalendarBase is not null &&
                          !CalendarBase.IsTimeIncluded(nextIncludedTime))
                 {
                     nextIncludedTime =
@@ -531,7 +557,7 @@ public sealed class DailyCalendar : BaseCalendar
                     nextIncludedTime = GetEndOfDay(nextIncludedTime);
                     nextIncludedTime = nextIncludedTime.AddMilliseconds(1);
                 }
-                else if (CalendarBase != null &&
+                else if (CalendarBase is not null &&
                          !CalendarBase.IsTimeIncluded(nextIncludedTime))
                 {
                     nextIncludedTime =
@@ -605,16 +631,16 @@ public sealed class DailyCalendar : BaseCalendar
     }
 
     /// <summary>
-    /// Returns a <see cref="T:System.String"></see> that represents the current <see cref="T:System.Object"></see>.
+    /// Returns a <see cref="System.String"></see> that represents the current <see cref="System.Object"></see>.
     /// </summary>
     /// <returns>
-    /// A <see cref="T:System.String"></see> that represents the current <see cref="T:System.Object"></see>.
+    /// A <see cref="System.String"></see> that represents the current <see cref="System.Object"></see>.
     /// </returns>
     public override string ToString()
     {
         StringBuilder buffer = new StringBuilder();
         buffer.Append("base calendar: [");
-        if (CalendarBase != null)
+        if (CalendarBase is not null)
         {
             buffer.Append(CalendarBase);
         }
@@ -637,8 +663,7 @@ public sealed class DailyCalendar : BaseCalendar
     /// </summary>
     /// <param name="rangeStartingTimeString">The range starting time string.</param>
     /// <param name="rangeEndingTimeString">The range ending time string.</param>
-    public void SetTimeRange(string rangeStartingTimeString,
-        string rangeEndingTimeString)
+    public void SetTimeRange(string rangeStartingTimeString, string rangeEndingTimeString)
     {
         int rangeStartingSecond;
         int rangeStartingMillis;
@@ -721,7 +746,8 @@ public sealed class DailyCalendar : BaseCalendar
     /// <param name="rangeEndingMinute">The range ending minute.</param>
     /// <param name="rangeEndingSecond">The range ending second.</param>
     /// <param name="rangeEndingMillis">The range ending millis.</param>
-    public void SetTimeRange(int rangeStartingHourOfDay,
+    public void SetTimeRange(
+        int rangeStartingHourOfDay,
         int rangeStartingMinute,
         int rangeStartingSecond,
         int rangeStartingMillis,
@@ -740,12 +766,12 @@ public sealed class DailyCalendar : BaseCalendar
             rangeEndingSecond,
             rangeEndingMillis);
 
-        DateTimeOffset startCal = SystemTime.UtcNow();
+        DateTimeOffset startCal = timeProvider.GetUtcNow();
         startCal =
             new DateTimeOffset(startCal.Year, startCal.Month, startCal.Day, rangeStartingHourOfDay, rangeStartingMinute,
                 rangeStartingSecond, rangeStartingMillis, TimeSpan.Zero);
 
-        DateTimeOffset endCal = SystemTime.UtcNow();
+        DateTimeOffset endCal = timeProvider.GetUtcNow();
         endCal =
             new DateTimeOffset(endCal.Year, endCal.Month, endCal.Day, rangeEndingHourOfDay, rangeEndingMinute,
                 rangeEndingSecond, rangeEndingMillis, TimeSpan.Zero);
@@ -804,7 +830,7 @@ public sealed class DailyCalendar : BaseCalendar
     /// <returns></returns>
     private static DateTimeOffset GetStartOfDay(DateTimeOffset time)
     {
-        return new DateTimeOffset(new DateTime(time.Year, time.Month, time.Day, 0, 0, 0, 0), time.Offset);
+        return new DateTimeOffset(time.Date, time.Offset);
     }
 
     /// <summary>
@@ -814,7 +840,7 @@ public sealed class DailyCalendar : BaseCalendar
     /// <returns></returns>
     private static DateTimeOffset GetEndOfDay(DateTimeOffset time)
     {
-        return new DateTimeOffset(new DateTime(time.Year, time.Month, time.Day, 23, 59, 59, 999), time.Offset);
+        return new DateTimeOffset(time.Date.AddDays(1).AddMilliseconds(-1), time.Offset);
     }
 
     /// <summary>
@@ -847,7 +873,7 @@ public sealed class DailyCalendar : BaseCalendar
     public override int GetHashCode()
     {
         int baseHash = 0;
-        if (CalendarBase != null)
+        if (CalendarBase is not null)
             baseHash = CalendarBase.GetHashCode();
 
         return rangeStartingHourOfDay.GetHashCode() + rangeEndingHourOfDay.GetHashCode() +
@@ -859,11 +885,11 @@ public sealed class DailyCalendar : BaseCalendar
 
     public bool Equals(DailyCalendar obj)
     {
-        if (obj == null)
+        if (obj is null)
         {
             return false;
         }
-        bool baseEqual = CalendarBase == null || CalendarBase.Equals(obj.CalendarBase);
+        bool baseEqual = CalendarBase is null || CalendarBase.Equals(obj.CalendarBase);
 
         return baseEqual && InvertTimeRange == obj.InvertTimeRange &&
                rangeStartingHourOfDay == obj.rangeStartingHourOfDay &&

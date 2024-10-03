@@ -1,9 +1,8 @@
 using FluentAssertions;
+using FluentAssertions.Execution;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-
-using NUnit.Framework;
 
 using Quartz.Simpl;
 
@@ -25,8 +24,11 @@ public class MicrosoftDependencyInjectionJobFactoryTest
         var schedulerBuilder = SchedulerBuilder.Create()
             .Build();
 
+        const string testValue = "test";
+
         var jobDetail = JobBuilder.Create<TestJob>()
             .StoreDurably()
+            .UsingJobData(nameof(TestJob.Test), testValue)
             .Build();
 
         var serviceCollection = new ServiceCollection();
@@ -42,17 +44,23 @@ public class MicrosoftDependencyInjectionJobFactoryTest
         await scheduler.TriggerJob(jobDetail.Key);
 
         await Task.Delay(100);
+        using (new AssertionScope())
+        {
+            TestJob.Executed.Should().BeTrue();
+            TestJob.Disposed.Should().BeTrue();
+            TestJob.TestValue.Should().Be(testValue);
 
-        TestJob.Executed.Should().BeTrue();
-        TestJob.Disposed.Should().BeTrue();
-
-        Dependency.Disposed.Should().BeTrue();
+            Dependency.Disposed.Should().BeTrue();
+        }
     }
 
     private class TestJob : IJob, IDisposable
     {
         public static bool Executed { get; set; }
         public static bool Disposed { get; set; }
+        public static string TestValue { get; set; }
+
+        public string Test { get; set; }
 
         public TestJob(Dependency dependency)
         {
@@ -61,6 +69,7 @@ public class MicrosoftDependencyInjectionJobFactoryTest
         public ValueTask Execute(IJobExecutionContext context)
         {
             Executed = true;
+            TestValue = Test;
             return new ValueTask();
         }
 

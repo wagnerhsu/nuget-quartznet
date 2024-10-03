@@ -1,10 +1,12 @@
 using System.Text.Json;
 
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 using Quartz.HttpClient;
 using Quartz.Impl;
 using Quartz.Simpl;
+using Quartz.Spi;
 
 namespace Quartz;
 
@@ -115,6 +117,8 @@ public static class QuartzHttpClientServiceCollectionExtensions
 
         options.AssertValid();
 
+        services.TryAddSingleton<ISchedulerRepository>(new SchedulerRepository());
+
         services.AddSingleton<TScheduler>(serviceProvider =>
         {
             var httpClient = options.HttpClient ?? serviceProvider.GetRequiredService<IHttpClientFactory>().CreateClient(options.HttpClientName!);
@@ -126,7 +130,7 @@ public static class QuartzHttpClientServiceCollectionExtensions
                 scheduler = (IScheduler) Activator.CreateInstance(schedulerType, scheduler)!;
             }
 
-            SchedulerRepository.Instance.Bind(scheduler);
+            serviceProvider.GetRequiredService<ISchedulerRepository>().Bind(scheduler);
             return (TScheduler) scheduler;
         });
 

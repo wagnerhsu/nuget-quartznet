@@ -26,8 +26,6 @@ using FakeItEasy;
 
 using Microsoft.Extensions.Logging;
 
-using NUnit.Framework;
-
 using Quartz.Impl;
 using Quartz.Impl.Matchers;
 using Quartz.Impl.Triggers;
@@ -62,7 +60,7 @@ public class XMLSchedulingDataProcessorTest
     public void SetUp()
     {
         logger = A.Fake<ILogger<XMLSchedulingDataProcessor>>();
-        processor = new XMLSchedulingDataProcessor(logger, new SimpleTypeLoadHelper());
+        processor = new XMLSchedulingDataProcessor(logger, new SimpleTypeLoadHelper(), TimeProvider.System);
         mockScheduler = A.Fake<IScheduler>();
         A.CallTo(() => mockScheduler.GetJobDetail(A<JobKey>._, A<CancellationToken>._)).Returns(new ValueTask<IJobDetail>());
         A.CallTo(() => mockScheduler.GetTrigger(A<TriggerKey>._, A<CancellationToken>._)).Returns(new ValueTask<ITrigger>());
@@ -74,7 +72,7 @@ public class XMLSchedulingDataProcessorTest
     {
         Stream s = ReadJobXmlFromEmbeddedResource("MinimalConfiguration_20.xml");
         await processor.ProcessStream(s, null);
-        Assert.IsFalse(processor.OverWriteExistingData);
+        Assert.That(processor.OverWriteExistingData, Is.False);
 
         await processor.ScheduleJobs(mockScheduler);
     }
@@ -84,8 +82,8 @@ public class XMLSchedulingDataProcessorTest
     {
         Stream s = ReadJobXmlFromEmbeddedResource("RichConfiguration_20.xml");
         await processor.ProcessStream(s, null);
-        Assert.IsFalse(processor.OverWriteExistingData);
-        Assert.IsTrue(processor.IgnoreDuplicates);
+        Assert.That(processor.OverWriteExistingData, Is.False);
+        Assert.That(processor.IgnoreDuplicates, Is.True);
 
         await processor.ScheduleJobs(mockScheduler);
 
@@ -177,7 +175,7 @@ public class XMLSchedulingDataProcessorTest
             ITrigger trigger = TriggerBuilder.Create().WithIdentity("job1").WithSchedule(SimpleScheduleBuilder.RepeatHourlyForever()).Build();
             await scheduler.ScheduleJob(job, trigger);
 
-            XMLSchedulingDataProcessor processor = new XMLSchedulingDataProcessor(logger, new SimpleTypeLoadHelper());
+            XMLSchedulingDataProcessor processor = new XMLSchedulingDataProcessor(logger, new SimpleTypeLoadHelper(), TimeProvider.System);
             try
             {
                 await processor.ProcessFileAndScheduleJobs(scheduler, false);
@@ -190,13 +188,13 @@ public class XMLSchedulingDataProcessorTest
 
             // We should still have what we start with.
             var jobKeys = await scheduler.GetJobKeys(GroupMatcher<JobKey>.GroupEquals("DEFAULT"));
-            Assert.AreEqual(1, jobKeys.Count);
+            Assert.That(jobKeys.Count, Is.EqualTo(1));
             var triggerKeys = await scheduler.GetTriggerKeys(GroupMatcher<TriggerKey>.GroupEquals("DEFAULT"));
-            Assert.AreEqual(1, triggerKeys.Count);
+            Assert.That(triggerKeys.Count, Is.EqualTo(1));
 
             job = await scheduler.GetJobDetail(JobKey.Create("job1"));
             string fooValue = job.JobDataMap.GetString("foo");
-            Assert.AreEqual("dont_chg_me", fooValue);
+            Assert.That(fooValue, Is.EqualTo("dont_chg_me"));
         }
         finally
         {
@@ -206,7 +204,7 @@ public class XMLSchedulingDataProcessorTest
             }
 
             // shutdown scheduler
-            if (scheduler != null)
+            if (scheduler is not null)
             {
                 await scheduler.Shutdown();
             }
@@ -259,16 +257,16 @@ public class XMLSchedulingDataProcessorTest
             // Now load the xml data with directives: overwrite-existing-data=false, ignore-duplicates=true
             ITypeLoadHelper loadHelper = new SimpleTypeLoadHelper();
             loadHelper.Initialize();
-            XMLSchedulingDataProcessor processor = new XMLSchedulingDataProcessor(logger, loadHelper);
+            XMLSchedulingDataProcessor processor = new XMLSchedulingDataProcessor(logger, loadHelper, TimeProvider.System);
             await processor.ProcessFileAndScheduleJobs(tempFileName, scheduler);
             var jobKeys = await scheduler.GetJobKeys(GroupMatcher<JobKey>.GroupEquals("DEFAULT"));
-            Assert.AreEqual(2, jobKeys.Count);
+            Assert.That(jobKeys.Count, Is.EqualTo(2));
             var triggerKeys = await scheduler.GetTriggerKeys(GroupMatcher<TriggerKey>.GroupEquals("DEFAULT"));
-            Assert.AreEqual(2, triggerKeys.Count);
+            Assert.That(triggerKeys.Count, Is.EqualTo(2));
         }
         finally
         {
-            if (scheduler != null)
+            if (scheduler is not null)
             {
                 await scheduler.Shutdown();
             }
@@ -288,7 +286,6 @@ public class XMLSchedulingDataProcessorTest
     }
 
     [Test]
-    [Category("db-sqlserver")]
     public async Task TestSimpleTriggerNoRepeat()
     {
         IScheduler scheduler = await CreateDbBackedScheduler();
@@ -302,7 +299,7 @@ public class XMLSchedulingDataProcessorTest
         }
         finally
         {
-            if (scheduler != null)
+            if (scheduler is not null)
             {
                 await scheduler.Shutdown();
             }
@@ -318,7 +315,6 @@ public class XMLSchedulingDataProcessorTest
     }
 
     [Test]
-    [Category("db-sqlserver")]
     public async Task TestRemoveJobTypeNotFound()
     {
         var scheduler = await CreateDbBackedScheduler();
@@ -344,7 +340,7 @@ public class XMLSchedulingDataProcessorTest
 
             await ModifyStoredJobType();
 
-            XMLSchedulingDataProcessor processor = new XMLSchedulingDataProcessor(logger, new SimpleTypeLoadHelper());
+            XMLSchedulingDataProcessor processor = new XMLSchedulingDataProcessor(logger, new SimpleTypeLoadHelper(), TimeProvider.System);
 
             // when
             await processor.ProcessStreamAndScheduleJobs(ReadJobXmlFromEmbeddedResource("delete-no-job-class.xml"), scheduler);
@@ -377,7 +373,6 @@ public class XMLSchedulingDataProcessorTest
     }
 
     [Test]
-    [Category("db-sqlserver")]
     public async Task TestOverwriteJobTypeNotFound()
     {
         IScheduler scheduler = await CreateDbBackedScheduler();
@@ -402,7 +397,7 @@ public class XMLSchedulingDataProcessorTest
 
             await ModifyStoredJobType();
 
-            XMLSchedulingDataProcessor processor = new XMLSchedulingDataProcessor(logger, new SimpleTypeLoadHelper());
+            XMLSchedulingDataProcessor processor = new(logger, new SimpleTypeLoadHelper(), TimeProvider.System);
 
             await processor.ProcessStreamAndScheduleJobs(ReadJobXmlFromEmbeddedResource("overwrite-no-jobclass.xml"), scheduler);
 
@@ -453,7 +448,7 @@ public class XMLSchedulingDataProcessorTest
             await scheduler.ScheduleJob(job, trigger);
 
             // Now load the xml data with directives: overwrite-existing-data=false, ignore-duplicates=true
-            XMLSchedulingDataProcessor processor = new XMLSchedulingDataProcessor(logger, new SimpleTypeLoadHelper());
+            XMLSchedulingDataProcessor processor = new XMLSchedulingDataProcessor(logger, new SimpleTypeLoadHelper(), TimeProvider.System);
             await processor.ProcessStream(ReadJobXmlFromEmbeddedResource("directives_overwrite_no-ignoredups.xml"), "temp");
             var jobKeys = await scheduler.GetJobKeys(GroupMatcher<JobKey>.GroupEquals("DEFAULT"));
             Assert.That(jobKeys.Count, Is.EqualTo(2));
@@ -462,7 +457,7 @@ public class XMLSchedulingDataProcessorTest
         }
         finally
         {
-            if (scheduler != null)
+            if (scheduler is not null)
             {
                 await scheduler.Shutdown();
             }

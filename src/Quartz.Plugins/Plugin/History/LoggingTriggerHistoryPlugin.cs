@@ -24,7 +24,7 @@ using System.Globalization;
 using Microsoft.Extensions.Logging;
 
 using Quartz.Impl.Matchers;
-using Quartz.Logging;
+using Quartz.Diagnostics;
 using Quartz.Spi;
 
 using LogLevel = Microsoft.Extensions.Logging.LogLevel;
@@ -211,10 +211,27 @@ namespace Quartz.Plugin.History;
 /// <author>Marko Lahma (.NET)</author>
 public class LoggingTriggerHistoryPlugin : ISchedulerPlugin, ITriggerListener
 {
+    private readonly ILogger<LoggingTriggerHistoryPlugin> logger;
+    private readonly TimeProvider timeProvider;
+
     /// <summary>
-    /// Logger instance to use. Defaults to common logging.
+    /// Initializes a new instance of the <see cref="LoggingTriggerHistoryPlugin"/> class.
     /// </summary>
-    private ILogger<LoggingTriggerHistoryPlugin> logger { get; } = LogProvider.CreateLogger<LoggingTriggerHistoryPlugin>();
+    public LoggingTriggerHistoryPlugin()
+        : this(LogProvider.CreateLogger<LoggingTriggerHistoryPlugin>(), TimeProvider.System)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="LoggingTriggerHistoryPlugin"/> class.
+    /// </summary>
+    public LoggingTriggerHistoryPlugin(
+        ILogger<LoggingTriggerHistoryPlugin> logger,
+        TimeProvider timeProvider)
+    {
+        this.logger = logger;
+        this.timeProvider = timeProvider;
+    }
 
     /// <summary>
     /// Get or set the message that is printed upon the completion of a trigger's
@@ -297,16 +314,16 @@ public class LoggingTriggerHistoryPlugin : ISchedulerPlugin, ITriggerListener
         }
 
         object?[] args =
-        {
+        [
             trigger.Key.Name,
             trigger.Key.Group,
             trigger.GetPreviousFireTimeUtc(),
             trigger.GetNextFireTimeUtc(),
-            SystemTime.UtcNow(),
+            timeProvider.GetUtcNow(),
             context.JobDetail.Key.Name,
             context.JobDetail.Key.Group,
             context.RefireCount
-        };
+        ];
 
         WriteInfo(string.Format(CultureInfo.InvariantCulture, TriggerFiredMessage, args));
         return default;
@@ -334,15 +351,15 @@ public class LoggingTriggerHistoryPlugin : ISchedulerPlugin, ITriggerListener
         }
 
         object?[] args =
-        {
+        [
             trigger.Key.Name,
             trigger.Key.Group,
             trigger.GetPreviousFireTimeUtc(),
             trigger.GetNextFireTimeUtc(),
-            SystemTime.UtcNow(),
+            timeProvider.GetUtcNow(),
             trigger.JobKey.Name,
             trigger.JobKey.Group
-        };
+        ];
 
         WriteInfo(string.Format(CultureInfo.InvariantCulture, TriggerMisfiredMessage, args));
         return default;
@@ -393,18 +410,18 @@ public class LoggingTriggerHistoryPlugin : ISchedulerPlugin, ITriggerListener
         }
 
         object?[] args =
-        {
+        [
             trigger.Key.Name,
             trigger.Key.Group,
             trigger.GetPreviousFireTimeUtc(),
             trigger.GetNextFireTimeUtc(),
-            SystemTime.UtcNow(),
+            timeProvider.GetUtcNow(),
             context.JobDetail.Key.Name,
             context.JobDetail.Key.Group,
             context.RefireCount,
             triggerInstructionCode,
             instrCode
-        };
+        ];
 
         WriteInfo(string.Format(CultureInfo.InvariantCulture, TriggerCompleteMessage, args));
         return default;
@@ -435,6 +452,8 @@ public class LoggingTriggerHistoryPlugin : ISchedulerPlugin, ITriggerListener
 
     protected virtual void WriteInfo(string message)
     {
+#pragma warning disable CA2254
         logger.LogInformation(message);
+#pragma warning restore CA2254
     }
 }

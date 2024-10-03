@@ -52,15 +52,12 @@ public partial class StdAdoDelegate
     }
 
     /// <inheritdoc />
-    public virtual async ValueTask<IReadOnlyCollection<SchedulerStateRecord>> SelectSchedulerStateRecords(
-        ConnectionAndTransactionHolder conn,
-        string? instanceName,
-        CancellationToken cancellationToken = default)
+    public virtual async ValueTask<List<SchedulerStateRecord>> SelectSchedulerStateRecords(ConnectionAndTransactionHolder conn, string? instanceName, CancellationToken cancellationToken = default)
     {
         DbCommand cmd;
-        List<SchedulerStateRecord> list = new List<SchedulerStateRecord>();
+        List<SchedulerStateRecord> list = [];
 
-        if (instanceName != null)
+        if (instanceName is not null)
         {
             cmd = PrepareCommand(conn, ReplaceTablePrefix(SqlSelectSchedulerState));
             AddCommandParameter(cmd, "instanceName", instanceName);
@@ -75,10 +72,11 @@ public partial class StdAdoDelegate
         using var rs = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         while (await rs.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
-            SchedulerStateRecord rec = new SchedulerStateRecord();
-            rec.SchedulerInstanceId = rs.GetString(ColumnInstanceName)!;
-            rec.CheckinTimestamp = GetDateTimeFromDbValue(rs[ColumnLastCheckinTime]) ?? DateTimeOffset.MinValue;
-            rec.CheckinInterval = GetTimeSpanFromDbValue(rs[ColumnCheckinInterval]) ?? TimeSpan.Zero;
+            SchedulerStateRecord rec = new(
+                rs.GetString(ColumnInstanceName)!,
+                GetDateTimeFromDbValue(rs[ColumnLastCheckinTime]) ?? DateTimeOffset.MinValue,
+                GetTimeSpanFromDbValue(rs[ColumnCheckinInterval]) ?? TimeSpan.Zero);
+
             list.Add(rec);
         }
 

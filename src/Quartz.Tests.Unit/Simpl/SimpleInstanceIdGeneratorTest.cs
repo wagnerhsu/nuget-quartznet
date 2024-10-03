@@ -21,8 +21,6 @@
 
 using System.Net;
 
-using NUnit.Framework;
-
 using Quartz.Simpl;
 using Quartz.Spi;
 
@@ -43,7 +41,7 @@ public class SimpleInstanceIdGeneratorTest
     public async Task IdShouldNotExceed50Chars()
     {
         string instanceId = await generator.GenerateInstanceId();
-        Assert.That(instanceId.Length, Is.LessThanOrEqualTo(50));
+        Assert.That(instanceId, Has.Length.LessThanOrEqualTo(50));
     }
 
     private class TestInstanceIdGenerator : HostNameBasedIdGenerator
@@ -55,7 +53,7 @@ public class SimpleInstanceIdGeneratorTest
         public override async ValueTask<string> GenerateInstanceId(CancellationToken cancellationToken = default)
         {
             var hostName = await GetHostName(HostNameMaxLength, cancellationToken).ConfigureAwait(false);
-            return hostName + SystemTime.UtcNow().Ticks;
+            return hostName + TimeProvider.System.GetTimestamp();
         }
 
         protected override ValueTask<IPHostEntry> GetHostAddress(

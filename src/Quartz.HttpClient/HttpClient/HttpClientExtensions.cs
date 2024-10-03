@@ -128,7 +128,7 @@ internal static class HttpClientExtensions
             // Ignored because we can have responses which are not json
         }
 
-        if (problemDetails?.Detail == null || string.IsNullOrWhiteSpace(problemDetails.Detail))
+        if (problemDetails?.Detail is null || string.IsNullOrWhiteSpace(problemDetails.Detail))
         {
             // When Web API returns error response it is always problem details, so let HTTP client throw if we do not have problem details
             response.EnsureSuccessStatusCode();
@@ -139,7 +139,7 @@ internal static class HttpClientExtensions
         {
             // If scheduler is not found, then no requests will succeed, so lets throw even if throwOnNotFound is true.
             // Could probably add separate flag for this in problem details...
-            if (problemDetails.Detail.IndexOf("Unknown scheduler", StringComparison.OrdinalIgnoreCase) >= 0)
+            if (problemDetails.Detail.Contains("Unknown scheduler", StringComparison.OrdinalIgnoreCase))
             {
                 throw new HttpClientException($"Scheduler not found. {nameof(HttpScheduler)} might have been configured with wrong scheduler name.");
             }

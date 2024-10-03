@@ -30,20 +30,14 @@ public class MicrosoftDependencyInjectionJobFactory : PropertySettingJobFactory
         var scope = serviceProvider.CreateScope();
         ConfigureScope(scope, bundle, scheduler);
         var (job, fromContainer) = CreateJob(bundle, scope.ServiceProvider);
-        return new ScopedJob(scope, job, canDispose: !fromContainer);
+
+        return new AsyncScopedJob(scope, job, canDispose: !fromContainer);
     }
 
     protected virtual void ConfigureScope(IServiceScope scope, TriggerFiredBundle bundle, IScheduler scheduler)
     {
         // Configuration point for Services that are Scoped and need
         // the ambient context of a Job
-    }
-
-    public override void SetObjectProperties(object obj, JobDataMap data)
-    {
-        // we need to check if job is actually a scoped job wrapper
-        var target = obj is ScopedJob scopedJob ? scopedJob.InnerJob : obj;
-        base.SetObjectProperties(target, data);
     }
 
     private (IJob Job, bool FromContainer) CreateJob(TriggerFiredBundle bundle, IServiceProvider serviceProvider)
@@ -59,38 +53,47 @@ public class MicrosoftDependencyInjectionJobFactory : PropertySettingJobFactory
         return (activatorCache.CreateInstance(serviceProvider, bundle.JobDetail.JobType), false);
     }
 
-    public override void ReturnJob(IJob job)
-    {
-        (job as IDisposable)?.Dispose();
-    }
-
-    private sealed class ScopedJob : IJob, IJobWrapper, IDisposable
+    private sealed class AsyncScopedJob : IJob, IJobWrapper, IAsyncDisposable
     {
         private readonly IServiceScope scope;
         private readonly bool canDispose;
 
-        public ScopedJob(IServiceScope scope, IJob innerJob, bool canDispose)
+        public AsyncScopedJob(IServiceScope scope, IJob innerJob, bool canDispose)
         {
             this.scope = scope;
             this.canDispose = canDispose;
-            InnerJob = innerJob;
+            this.Target = innerJob;
         }
 
-        internal IJob InnerJob { get; }
-        public IJob Target => InnerJob;
+        public IJob Target { get; }
 
-        public void Dispose()
+        public async ValueTask DisposeAsync()
         {
             if (canDispose)
             {
-                (InnerJob as IDisposable)?.Dispose();
+                if (Target is IAsyncDisposable asyncDisposableInnerJob)
+                {
+                    await asyncDisposableInnerJob.DisposeAsync().ConfigureAwait(false);
+                }
+                else if (Target is IDisposable disposableInnerJob)
+                {
+                    disposableInnerJob.Dispose();
+                }
             }
-            scope.Dispose();
+
+            if (scope is IAsyncDisposable scopeAsyncDisposable)
+            {
+                await scopeAsyncDisposable.DisposeAsync().ConfigureAwait(false);
+            }
+            else
+            {
+                scope.Dispose();
+            }
         }
 
         public ValueTask Execute(IJobExecutionContext context)
         {
-            return InnerJob.Execute(context);
+            return Target.Execute(context);
         }
     }
 }

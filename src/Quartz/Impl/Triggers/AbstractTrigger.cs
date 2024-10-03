@@ -17,7 +17,6 @@
  */
 #endregion
 
-using System.Globalization;
 using System.Runtime.Serialization;
 
 using Quartz.Spi;
@@ -74,6 +73,10 @@ public abstract class AbstractTrigger : IOperableTrigger, IEquatable<AbstractTri
     private DateTimeOffset? endTimeUtc;
     private DateTimeOffset startTimeUtc;
 
+    [NonSerialized]
+    private TimeProvider timeProvider;
+
+    internal TimeProvider TimeProvider => timeProvider ?? TimeProvider.System;
 
     /// <summary>
     /// Gets or sets the key of the trigger.
@@ -85,7 +88,7 @@ public abstract class AbstractTrigger : IOperableTrigger, IEquatable<AbstractTri
         set
         {
             // Update fields to ensure we remain backward compatible for serialization
-            if (value == null)
+            if (value is null)
             {
                 name = null!;
                 group = null!;
@@ -110,7 +113,7 @@ public abstract class AbstractTrigger : IOperableTrigger, IEquatable<AbstractTri
         set
         {
             // Update fields to ensure we remain backward compatibile for serialization
-            if (value == null)
+            if (value is null)
             {
                 jobName = null!;
                 jobGroup = null!;
@@ -165,7 +168,7 @@ public abstract class AbstractTrigger : IOperableTrigger, IEquatable<AbstractTri
     {
         get
         {
-            if (jobDataMap == null)
+            if (jobDataMap is null)
             {
                 jobDataMap = new JobDataMap();
             }
@@ -298,6 +301,11 @@ public abstract class AbstractTrigger : IOperableTrigger, IEquatable<AbstractTri
         get;
     }
 
+    protected AbstractTrigger()
+    {
+        this.timeProvider = TimeProvider.System;
+    }
+
     /// <summary>
     /// Create a <see cref="ITrigger" /> with no specified name, group, or <see cref="IJobDetail" />.
     /// </summary>
@@ -305,8 +313,10 @@ public abstract class AbstractTrigger : IOperableTrigger, IEquatable<AbstractTri
     /// Note that <see cref="Key" /> and <see cref="JobKey" /> must be set before
     /// the <see cref="ITrigger" /> can be placed into a <see cref="IScheduler" />.
     /// </remarks>
-    protected AbstractTrigger()
+    /// <param name="timeProvider">Time provider instance to use</param>
+    protected AbstractTrigger(TimeProvider timeProvider)
     {
+        this.timeProvider = timeProvider;
     }
 
     /// <summary>
@@ -317,8 +327,9 @@ public abstract class AbstractTrigger : IOperableTrigger, IEquatable<AbstractTri
     /// can be placed into a <see cref="IScheduler" />.
     /// </remarks>
     /// <param name="name">The name.</param>
+    /// <param name="timeProvider">Time provider instance to use</param>
     /// <exception cref="ArgumentNullException"><paramref name="name"/> is <see langword="null"/>.</exception>
-    protected AbstractTrigger(string name) : this(name, SchedulerConstants.DefaultGroup)
+    protected AbstractTrigger(string name, TimeProvider timeProvider) : this(name, SchedulerConstants.DefaultGroup, timeProvider)
     {
     }
 
@@ -331,8 +342,9 @@ public abstract class AbstractTrigger : IOperableTrigger, IEquatable<AbstractTri
     /// </remarks>
     /// <param name="name">The name.</param>
     /// <param name="group">The group.</param>
+    /// <param name="timeProvider">Time provider instance to use</param>
     /// <exception cref="ArgumentNullException"><paramref name="name"/> or <paramref name="group"/> are <see langword="null"/>.</exception>
-    protected AbstractTrigger(string name, string group)
+    protected AbstractTrigger(string name, string group, TimeProvider timeProvider) : this(timeProvider)
     {
         Key = new TriggerKey(name, group);
     }
@@ -344,8 +356,9 @@ public abstract class AbstractTrigger : IOperableTrigger, IEquatable<AbstractTri
     /// <param name="group">if <see langword="null" />, Scheduler.DefaultGroup will be used.</param>
     /// <param name="jobName">Name of the job.</param>
     /// <param name="jobGroup">The job group.</param>
+    /// <param name="timeProvider">Time provider instance to use</param>
     /// <exception cref="ArgumentNullException"><paramref name="name"/>, <paramref name="group"/>, <paramref name="jobName"/> or <paramref name="jobGroup"/> are <see langword="null"/>.</exception>
-    protected AbstractTrigger(string name, string group, string jobName, string jobGroup)
+    protected AbstractTrigger(string name, string group, string jobName, string jobGroup, TimeProvider timeProvider) : this(timeProvider)
     {
         Key = new TriggerKey(name, group);
         JobKey = new JobKey(jobName, jobGroup);
@@ -420,17 +433,17 @@ public abstract class AbstractTrigger : IOperableTrigger, IEquatable<AbstractTri
     /// <seealso cref="Triggered" />
     public virtual SchedulerInstruction ExecutionComplete(IJobExecutionContext context, JobExecutionException? result)
     {
-        if (result != null && result.RefireImmediately)
+        if (result is not null && result.RefireImmediately)
         {
             return SchedulerInstruction.ReExecuteJob;
         }
 
-        if (result != null && result.UnscheduleFiringTrigger)
+        if (result is not null && result.UnscheduleFiringTrigger)
         {
             return SchedulerInstruction.SetTriggerComplete;
         }
 
-        if (result != null && result.UnscheduleAllTriggers)
+        if (result is not null && result.UnscheduleAllTriggers)
         {
             return SchedulerInstruction.SetAllJobTriggersComplete;
         }
@@ -514,12 +527,12 @@ public abstract class AbstractTrigger : IOperableTrigger, IEquatable<AbstractTri
     /// </summary>
     public virtual void Validate()
     {
-        if (key == null)
+        if (key is null)
         {
             ThrowHelper.ThrowSchedulerException("Trigger's key cannot be null");
         }
 
-        if (jobKey == null)
+        if (jobKey is null)
         {
             ThrowHelper.ThrowSchedulerException("Trigger's job key cannot be null");
         }
@@ -544,45 +557,14 @@ public abstract class AbstractTrigger : IOperableTrigger, IEquatable<AbstractTri
     /// Return a simple string representation of this object.
     /// </summary>
     public override string ToString()
-    {
-        return
-            string.Format(
-                CultureInfo.InvariantCulture,
-                "Trigger '{0}':  triggerClass: '{1} calendar: '{2}' misfireInstruction: {3} nextFireTime: {4}",
-                key?.ToString(), GetType().FullName, CalendarName, MisfireInstruction, GetNextFireTimeUtc());
-    }
+        => $"Trigger '{key}':  triggerClass: '{GetType().FullName} calendar: '{CalendarName}' misfireInstruction: {MisfireInstruction} nextFireTime: {GetNextFireTimeUtc()}";
 
     /// <summary>
-    /// Compare the next fire time of this <see cref="ITrigger" /> to that of
-    /// another by comparing their keys, or in other words, sorts them
-    /// according to the natural (i.e. alphabetical) order of their keys.
+    /// Determines whether the specified <see cref="System.Object"></see> is equal to the current <see cref="System.Object"></see>.
     /// </summary>
-    /// <param name="other"></param>
-    /// <returns></returns>
-    public virtual int CompareTo(ITrigger? other)
-    {
-        if ((other == null || other.Key == null) && Key == null)
-        {
-            return 0;
-        }
-        if (other == null || other.Key == null)
-        {
-            return -1;
-        }
-        if (Key == null)
-        {
-            return 1;
-        }
-
-        return Key.CompareTo(other.Key);
-    }
-
-    /// <summary>
-    /// Determines whether the specified <see cref="T:System.Object"></see> is equal to the current <see cref="T:System.Object"></see>.
-    /// </summary>
-    /// <param name="obj">The <see cref="T:System.Object"></see> to compare with the current <see cref="T:System.Object"></see>.</param>
+    /// <param name="obj">The <see cref="System.Object"></see> to compare with the current <see cref="System.Object"></see>.</param>
     /// <returns>
-    /// true if the specified <see cref="T:System.Object"></see> is equal to the current <see cref="T:System.Object"></see>; otherwise, false.
+    /// true if the specified <see cref="System.Object"></see> is equal to the current <see cref="System.Object"></see>; otherwise, false.
     /// </returns>
     public override bool Equals(object? obj)
     {
@@ -596,7 +578,7 @@ public abstract class AbstractTrigger : IOperableTrigger, IEquatable<AbstractTri
     /// <returns>true if the key of this Trigger equals that of the given Trigger</returns>
     public virtual bool Equals(AbstractTrigger? trigger)
     {
-        if (trigger?.Key == null || Key == null)
+        if (trigger?.Key is null || Key is null)
         {
             return false;
         }
@@ -605,14 +587,14 @@ public abstract class AbstractTrigger : IOperableTrigger, IEquatable<AbstractTri
     }
 
     /// <summary>
-    /// Serves as a hash function for a particular type. <see cref="M:System.Object.GetHashCode"></see> is suitable for use in hashing algorithms and data structures like a hash table.
+    /// Serves as a hash function for a particular type. <see cref="System.Object.GetHashCode"></see> is suitable for use in hashing algorithms and data structures like a hash table.
     /// </summary>
     /// <returns>
-    /// A hash code for the current <see cref="T:System.Object"></see>.
+    /// A hash code for the current <see cref="System.Object"></see>.
     /// </returns>
     public override int GetHashCode()
     {
-        if (Key == null)
+        if (Key is null)
         {
             return base.GetHashCode();
         }
@@ -633,7 +615,7 @@ public abstract class AbstractTrigger : IOperableTrigger, IEquatable<AbstractTri
         // Shallow copy the jobDataMap.  Note that this means that if a user
         // modifies a value object in this map from the cloned Trigger
         // they will also be modifying this Trigger.
-        if (jobDataMap != null)
+        if (jobDataMap is not null)
         {
             copy.jobDataMap = (JobDataMap) jobDataMap.Clone();
         }
@@ -651,12 +633,12 @@ public abstract class AbstractTrigger : IOperableTrigger, IEquatable<AbstractTri
     [OnDeserialized]
     private void OnDeserialized(StreamingContext context)
     {
-        if (name != null && group != null)
+        if (name is not null && group is not null)
         {
             key = new TriggerKey(name, group);
         }
 
-        if (jobName != null && jobGroup != null)
+        if (jobName is not null && jobGroup is not null)
         {
             jobKey = new JobKey(jobName, jobGroup);
         }

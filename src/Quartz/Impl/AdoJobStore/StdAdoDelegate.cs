@@ -30,7 +30,7 @@ using Microsoft.Extensions.Logging;
 
 using Quartz.Impl.AdoJobStore.Common;
 using Quartz.Impl.Matchers;
-using Quartz.Logging;
+using Quartz.Diagnostics;
 using Quartz.Spi;
 using Quartz.Util;
 
@@ -51,10 +51,15 @@ public partial class StdAdoDelegate : StdAdoConstants, IDriverDelegate, IDbAcces
     private string instanceId = null!;
     private string schedName = null!;
     private bool useProperties;
+
     private ITypeLoadHelper typeLoadHelper = null!;
     private AdoUtil adoUtil = null!;
-    private readonly List<ITriggerPersistenceDelegate> triggerPersistenceDelegates = new List<ITriggerPersistenceDelegate>();
+
+    private readonly List<ITriggerPersistenceDelegate> triggerPersistenceDelegates = new();
+
     private IObjectSerializer objectSerializer = null!;
+    private TimeProvider timeProvider = null!;
+
     private readonly ConcurrentDictionary<string, string> cachedQueries = new();
 
     protected IDbProvider DbProvider { get; private set; } = null!;
@@ -73,10 +78,11 @@ public partial class StdAdoDelegate : StdAdoConstants, IDriverDelegate, IDbAcces
         useProperties = args.UseProperties;
         adoUtil = new AdoUtil(args.DbProvider);
         objectSerializer = args.ObjectSerializer!;
+        timeProvider = args.TimeProvider;
 
         AddDefaultTriggerPersistenceDelegates();
 
-        if (!string.IsNullOrEmpty(args.InitString) && args.InitString != null)
+        if (!string.IsNullOrEmpty(args.InitString) && args.InitString is not null)
         {
             string[] settings = args.InitString.Split('\\', '|');
 
@@ -97,10 +103,10 @@ public partial class StdAdoDelegate : StdAdoConstants, IDriverDelegate, IDbAcces
                 }
 
                 // we support old *Classes and new *Types, latter has better support for assembly qualified names
-                if (name.Equals("triggerPersistenceDelegateClasses") || name.Equals("triggerPersistenceDelegateTypes"))
+                if (name is "triggerPersistenceDelegateClasses" or "triggerPersistenceDelegateTypes")
                 {
                     var separator = ',';
-                    if (value.IndexOf(';') != -1 || name.Equals("triggerPersistenceDelegateTypes"))
+                    if (value.Contains(';') || name == "triggerPersistenceDelegateTypes")
                     {
                         // use separator that allows assembly qualified names
                         separator = ';';
@@ -211,7 +217,7 @@ public partial class StdAdoDelegate : StdAdoConstants, IDriverDelegate, IDbAcces
     /// <returns></returns>
     public virtual bool GetBooleanFromDbValue(object columnValue)
     {
-        if (columnValue != null && columnValue != DBNull.Value)
+        if (columnValue is not null && columnValue != DBNull.Value)
         {
             return Convert.ToBoolean(columnValue);
         }
@@ -237,7 +243,7 @@ public partial class StdAdoDelegate : StdAdoConstants, IDriverDelegate, IDbAcces
     /// <returns></returns>
     public virtual DateTimeOffset? GetDateTimeFromDbValue(object columnValue)
     {
-        if (columnValue != null && columnValue != DBNull.Value)
+        if (columnValue is not null && columnValue != DBNull.Value)
         {
             var ticks = Convert.ToInt64(columnValue, CultureInfo.CurrentCulture);
             if (ticks > 0)
@@ -255,7 +261,7 @@ public partial class StdAdoDelegate : StdAdoConstants, IDriverDelegate, IDbAcces
     /// <returns></returns>
     public virtual object? GetDbTimeSpanValue(TimeSpan? timeSpanValue)
     {
-        return timeSpanValue != null ? (long?) timeSpanValue.Value.TotalMilliseconds : null;
+        return timeSpanValue is not null ? (long?) timeSpanValue.Value.TotalMilliseconds : null;
     }
 
     /// <summary>
@@ -265,7 +271,7 @@ public partial class StdAdoDelegate : StdAdoConstants, IDriverDelegate, IDbAcces
     /// <returns></returns>
     public virtual TimeSpan? GetTimeSpanFromDbValue(object columnValue)
     {
-        if (columnValue != null && columnValue != DBNull.Value)
+        if (columnValue is not null && columnValue != DBNull.Value)
         {
             var millis = Convert.ToInt64(columnValue, CultureInfo.CurrentCulture);
             if (millis > 0)
@@ -344,7 +350,7 @@ public partial class StdAdoDelegate : StdAdoConstants, IDriverDelegate, IDbAcces
     private async ValueTask<IDictionary?> GetMapFromProperties(DbDataReader rs, int idx)
     {
         NameValueCollection? properties = await GetJobDataFromBlob<NameValueCollection>(rs, idx).ConfigureAwait(false);
-        if (properties == null)
+        if (properties is null)
         {
             return null;
         }
@@ -359,7 +365,7 @@ public partial class StdAdoDelegate : StdAdoConstants, IDriverDelegate, IDbAcces
     /// <param name="matcher"></param>
     /// <param name="cancellationToken">The cancellation instruction.</param>
     /// <returns>An array of <see cref="String" /> job names.</returns>
-    public virtual async ValueTask<IReadOnlyCollection<JobKey>> SelectJobsInGroup(
+    public virtual async ValueTask<List<JobKey>> SelectJobsInGroup(
         ConnectionAndTransactionHolder conn,
         GroupMatcher<JobKey> matcher,
         CancellationToken cancellationToken = default)
@@ -369,7 +375,7 @@ public partial class StdAdoDelegate : StdAdoConstants, IDriverDelegate, IDbAcces
         if (IsMatcherEquals(matcher))
         {
             sql = ReplaceTablePrefix(SqlSelectJobsInGroup);
-            parameter = ToSqlEqualsClause(matcher);
+            parameter = StdAdoDelegate.ToSqlEqualsClause(matcher);
         }
         else
         {
@@ -382,7 +388,7 @@ public partial class StdAdoDelegate : StdAdoConstants, IDriverDelegate, IDbAcces
         AddCommandParameter(cmd, "jobGroup", parameter);
 
         using var rs = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-        var list = new HashSet<JobKey>();
+        var list = new List<JobKey>();
         while (await rs.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
             list.Add(new JobKey(rs.GetString(0), rs.GetString(1)));
@@ -390,12 +396,12 @@ public partial class StdAdoDelegate : StdAdoConstants, IDriverDelegate, IDbAcces
         return list;
     }
 
-    protected bool IsMatcherEquals<T>(GroupMatcher<T> matcher) where T : Key<T>
+    protected static bool IsMatcherEquals<T>(GroupMatcher<T> matcher) where T : Key<T>
     {
         return matcher.CompareWithOperator.Equals(StringOperator.Equality);
     }
 
-    protected string ToSqlEqualsClause<T>(GroupMatcher<T> matcher) where T : Key<T>
+    protected static string ToSqlEqualsClause<T>(GroupMatcher<T> matcher) where T : Key<T>
     {
         return matcher.CompareToValue;
     }
@@ -466,18 +472,17 @@ public partial class StdAdoDelegate : StdAdoConstants, IDriverDelegate, IDbAcces
     protected virtual byte[]? SerializeObject(object? obj)
     {
         byte[]? retValue = null;
-        if (obj != null)
+        if (obj is not null)
         {
             retValue = objectSerializer.Serialize(obj);
         }
         return retValue;
     }
 
-    protected object? GetKeyOfNonSerializableValue(IDictionary data)
+    protected object? GetKeyOfNonSerializableValue(JobDataMap data)
     {
-        foreach (var o in data)
+        foreach (KeyValuePair<string, object?> entry in data)
         {
-            var entry = (DictionaryEntry) o!;
             try
             {
                 SerializeObject(entry.Value);
@@ -522,10 +527,10 @@ public partial class StdAdoDelegate : StdAdoConstants, IDriverDelegate, IDbAcces
     /// <summary>
     /// Convert the JobDataMap into a list of properties.
     /// </summary>
-    protected virtual NameValueCollection ConvertToProperty(IDictionary<string, object> data)
+    protected virtual NameValueCollection ConvertToProperty(IDictionary<string, object?> data)
     {
         NameValueCollection properties = new NameValueCollection();
-        foreach (KeyValuePair<string, object> entry in data)
+        foreach (KeyValuePair<string, object?> entry in data)
         {
             string key = entry.Key;
             object val = entry.Value ?? string.Empty;
@@ -557,7 +562,7 @@ public partial class StdAdoDelegate : StdAdoConstants, IDriverDelegate, IDbAcces
         T? obj = null;
 
         byte[]? data = await ReadBytesFromBlob(rs, colIndex, cancellationToken).ConfigureAwait(false);
-        if (data != null && data.Length > 0)
+        if (data is not null && data.Length > 0)
         {
             obj = objectSerializer.DeSerialize<T>(data);
         }

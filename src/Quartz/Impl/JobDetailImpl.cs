@@ -20,7 +20,6 @@
 #endregion
 
 using System.Collections.Concurrent;
-using System.Globalization;
 
 using Quartz.Util;
 
@@ -182,7 +181,7 @@ internal sealed class JobDetailImpl : IJobDetail
         this.disallowConcurrentExecution = disallowConcurrentExecution;
         this.persistJobDataAfterExecution = persistJobDataAfterExecution;
 
-        if (jobDataMap != null)
+        if (jobDataMap is not null)
         {
             this.jobDataMap = jobDataMap;
         }
@@ -221,12 +220,12 @@ internal sealed class JobDetailImpl : IJobDetail
         get => group;
         private set
         {
-            if (value != null && value.Trim().Length == 0)
+            if (value is not null && value.Trim().Length == 0)
             {
                 ThrowHelper.ThrowArgumentException("Group name cannot be empty.");
             }
 
-            if (value == null)
+            if (value is null)
             {
                 value = SchedulerConstants.DefaultGroup;
             }
@@ -249,9 +248,9 @@ internal sealed class JobDetailImpl : IJobDetail
     {
         get
         {
-            if (key == null)
+            if (key is null)
             {
-                if (Name == null)
+                if (Name is null)
                 {
                     return null!;
                 }
@@ -296,7 +295,7 @@ internal sealed class JobDetailImpl : IJobDetail
     {
         get
         {
-            if (jobDataMap == null)
+            if (jobDataMap is null)
             {
                 jobDataMap = new JobDataMap();
             }
@@ -378,17 +377,17 @@ internal sealed class JobDetailImpl : IJobDetail
     /// </summary>
     public void Validate()
     {
-        if (name == null)
+        if (name is null)
         {
             ThrowHelper.ThrowSchedulerException("Job's name cannot be null");
         }
 
-        if (group == null)
+        if (group is null)
         {
             ThrowHelper.ThrowSchedulerException("Job's group cannot be null");
         }
 
-        if (jobType == null)
+        if (jobType is null)
         {
             ThrowHelper.ThrowSchedulerException("Job's class cannot be null");
         }
@@ -398,13 +397,7 @@ internal sealed class JobDetailImpl : IJobDetail
     /// Return a simple string representation of this object.
     /// </summary>
     public override string ToString()
-    {
-        return
-            string.Format(
-                CultureInfo.InvariantCulture,
-                "JobDetail '{0}':  jobType: '{1} persistJobDataAfterExecution: {2} concurrentExecutionDisallowed: {3} isDurable: {4} requestsRecovers: {5}",
-                FullName, JobType?.FullName, PersistJobDataAfterExecution, ConcurrentExecutionDisallowed, Durable, RequestsRecovery);
-    }
+        => $"JobDetail '{FullName}':  jobType: '{JobType?.FullName} persistJobDataAfterExecution: {PersistJobDataAfterExecution} concurrentExecutionDisallowed: {ConcurrentExecutionDisallowed} isDurable: {Durable} requestsRecovers: {RequestsRecovery}";
 
     /// <summary>
     /// Creates a new object that is a copy of the current instance.
@@ -415,7 +408,7 @@ internal sealed class JobDetailImpl : IJobDetail
     public IJobDetail Clone()
     {
         var copy = (JobDetailImpl) MemberwiseClone();
-        if (jobDataMap != null)
+        if (jobDataMap is not null)
         {
             copy.jobDataMap = (JobDataMap) jobDataMap.Clone();
         }
@@ -433,16 +426,16 @@ internal sealed class JobDetailImpl : IJobDetail
     {
         //doesn't consider job's saved data,
         //durability etc
-        return detail != null && detail.Name == Name && detail.Group == Group && detail.JobType.Equals(JobType);
+        return detail is not null && detail.Name == Name && detail.Group == Group && detail.JobType.Equals(JobType);
     }
 
     /// <summary>
-    /// Determines whether the specified <see cref="T:System.Object"/> is equal to the current <see cref="T:System.Object"/>.
+    /// Determines whether the specified <see cref="System.Object"/> is equal to the current <see cref="System.Object"/>.
     /// </summary>
-    /// <param name="obj">The <see cref="T:System.Object"/> to compare with the current <see cref="T:System.Object"/>.</param>
+    /// <param name="obj">The <see cref="System.Object"/> to compare with the current <see cref="System.Object"/>.</param>
     /// <returns>
-    /// 	<see langword="true"/> if the specified <see cref="T:System.Object"/> is equal to the
-    /// current <see cref="T:System.Object"/>; otherwise, <see langword="false"/>.
+    /// 	<see langword="true"/> if the specified <see cref="System.Object"/> is equal to the
+    /// current <see cref="System.Object"/>; otherwise, <see langword="false"/>.
     /// </returns>
     public override bool Equals(object? obj)
     {
@@ -469,7 +462,7 @@ internal sealed class JobDetailImpl : IJobDetail
     /// for use in hashing algorithms and data structures like a hash table.
     /// </summary>
     /// <returns>
-    /// A hash code for the current <see cref="T:System.Object"/>.
+    /// A hash code for the current <see cref="System.Object"/>.
     /// </returns>
     public override int GetHashCode()
     {

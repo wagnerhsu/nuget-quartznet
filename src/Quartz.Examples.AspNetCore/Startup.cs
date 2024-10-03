@@ -13,6 +13,8 @@ using NSwag.Generation.AspNetCore;
 using NSwag.Generation.Processors;
 using NSwag.Generation.Processors.Security;
 
+using OpenTelemetry;
+using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using Quartz.AspNetCore;
@@ -48,20 +50,32 @@ public class Startup
         {
             loggingBuilder.ClearProviders();
             loggingBuilder.AddSerilog(dispose: true);
+            loggingBuilder.AddOpenTelemetry(options =>
+            {
+                options.IncludeFormattedMessage = true;
+                options.IncludeScopes = true;
+            });
         });
+
         services.AddOpenTelemetry()
             .ConfigureResource(builder => builder.AddService("Quartz ASP.NET Example"))
+            .WithMetrics(metrics =>
+            {
+                metrics.AddRuntimeInstrumentation()
+                    .AddMeter("Quartz", "Microsoft.AspNetCore.Hosting", "Microsoft.AspNetCore.Server.Kestrel", "System.Net.Http");
+            })
             .WithTracing(x => x
-                .AddQuartzInstrumentation()
+                .AddSource("Quartz")
+                .AddAspNetCoreInstrumentation()
+                .AddHttpClientInstrumentation()
                 .AddConsoleExporter()
-                .AddZipkinExporter(o => { o.Endpoint = new Uri("http://localhost:9411/api/v2/spans"); })
-                .AddJaegerExporter(o =>
-                {
-                    // these are the defaults
-                    o.AgentHost = "localhost";
-                    o.AgentPort = 6831;
-                })
             );
+
+        var useOtlpExporter = !string.IsNullOrWhiteSpace(Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]);
+        if (useOtlpExporter)
+        {
+            services.AddOpenTelemetry().UseOtlpExporter();
+        }
 
         services.AddRazorPages();
 
@@ -77,6 +91,12 @@ public class Startup
 
         // custom connection provider
         services.AddSingleton<IDbProvider, CustomSqlServerConnectionProvider>();
+
+        // a custom time provider will be pulled from DI
+        services.AddSingleton<TimeProvider, CustomTimeProvider>();
+
+        // async disposable
+        services.AddScoped<AsyncDisposableDependency>();
 
         services.AddQuartz(q =>
         {
@@ -107,7 +127,7 @@ public class Startup
             q.ScheduleJob<ExampleJob>(trigger => trigger
                 .WithIdentity("Combined Configuration Trigger")
                 .StartAt(DateBuilder.EvenSecondDate(DateTimeOffset.UtcNow.AddSeconds(7)))
-                .WithDailyTimeIntervalSchedule(x => x.WithInterval(10, IntervalUnit.Second))
+                .WithDailyTimeIntervalSchedule(interval: 10, intervalUnit: IntervalUnit.Second)
                 .WithDescription("my awesome trigger configured for a job with single call")
             );
 
@@ -162,6 +182,13 @@ public class Startup
                     .UsingJobData(JobInterruptMonitorPlugin.JobDataMapKeyMaxRunTime, TimeSpan.FromSeconds(5).TotalMilliseconds.ToString(CultureInfo.InvariantCulture))
             );
 
+            // async disposable dependencies
+            q.ScheduleJob<AsyncDisposableJob>(
+                triggerConfigurator => triggerConfigurator
+                    .StartNow()
+                    .WithSimpleSchedule(x => x.WithIntervalInSeconds(5).WithRepeatCount(2))
+            );
+
             const string calendarName = "myHolidayCalendar";
             q.AddCalendar<HolidayCalendar>(
                 name: calendarName,
@@ -174,7 +201,7 @@ public class Startup
                 .WithIdentity("Daily Trigger")
                 .ForJob(jobKey)
                 .StartAt(DateBuilder.EvenSecondDate(DateTimeOffset.UtcNow.AddSeconds(5)))
-                .WithDailyTimeIntervalSchedule(x => x.WithInterval(10, IntervalUnit.Second))
+                .WithDailyTimeIntervalSchedule(interval: 10, intervalUnit: IntervalUnit.Second)
                 .WithDescription("my awesome daily time interval trigger")
                 .ModifiedByCalendar(calendarName)
             );
@@ -182,7 +209,7 @@ public class Startup
             // also add XML configuration and poll it for changes
             q.UseXmlSchedulingConfiguration(x =>
             {
-                x.Files = new[] { "~/quartz_jobs.config" };
+                x.Files = ["~/quartz_jobs.config"];
                 x.ScanInterval = TimeSpan.FromMinutes(1);
                 x.FailOnFileNotFound = true;
                 x.FailOnSchedulingError = true;
@@ -206,7 +233,7 @@ public class Startup
 
             q.UsePersistentStore<CustomJobStore>(options =>
             {
-                options.UseNewtonsoftJsonSerializer();
+                options.UseSystemTextJsonSerializer();
             });
 
             // example of persistent job store using JSON serializer as an example
@@ -216,7 +243,7 @@ public class Startup
                 s.PerformSchemaValidation = true; // default
                 s.UseProperties = true; // preferred, but not default
                 s.RetryInterval = TimeSpan.FromSeconds(15);
-                s.UseSqlServer(sqlServer =>
+                s.UseSqlServer("sql-server-01", sqlServer =>
                 {
                     // if needed, could create a custom strategy for handling connections
                     //sqlServer.UseConnectionProvider<CustomSqlServerConnectionProvider>();
@@ -229,7 +256,7 @@ public class Startup
                     // this is the default
                     sqlServer.TablePrefix = "QRTZ_";
                 });
-                s.UseJsonSerializer();
+                s.UseSystemTextJsonSerializer();
                 s.UseClustering(c =>
                 {
                     c.CheckinMisfireThreshold = TimeSpan.FromSeconds(20);
@@ -368,4 +395,7 @@ public class Startup
             settings.OperationProcessors.Add(new AspNetCoreOperationSecurityScopeProcessor(securityScope));
         });
     }
+
+    private sealed class CustomTimeProvider : TimeProvider;
 }
+

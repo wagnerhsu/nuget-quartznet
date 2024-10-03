@@ -4,8 +4,6 @@ using System.Diagnostics;
 
 using Microsoft.Data.Sqlite;
 
-using NUnit.Framework;
-
 using Quartz.Impl;
 using Quartz.Impl.Calendar;
 using Quartz.Impl.Matchers;
@@ -18,10 +16,9 @@ namespace Quartz.Tests.Integration.Impl.AdoJobStore;
 
 public class AdoJobStoreSmokeTest
 {
-    private static readonly Dictionary<string, string> dbConnectionStrings = new Dictionary<string, string>();
+    private static readonly Dictionary<string, string> dbConnectionStrings = new();
     private readonly bool clearJobs = true;
     private readonly bool scheduleJobs = true;
-    private TestLoggerHelper testLoggerHelper;
 
     private const string KeyResetEvent = "ResetEvent";
 
@@ -35,12 +32,6 @@ public class AdoJobStoreSmokeTest
         dbConnectionStrings["SQLite"] = "Data Source=test.db;Version=3;";
         dbConnectionStrings["SQLite-Microsoft"] = "Data Source=test.db;";
         dbConnectionStrings["Firebird"] = "User=SYSDBA;Password=masterkey;Database=/firebird/data/quartz.fdb;DataSource=localhost;Port=3050;Dialect=3;Charset=NONE;Role=;Connection lifetime=15;Pooling=true;MinPoolSize=0;MaxPoolSize=50;Packet Size=8192;ServerType=0;";
-    }
-
-    [OneTimeSetUp]
-    public void FixtureSetUp()
-    {
-        testLoggerHelper = new TestLoggerHelper();
     }
 
     [Test]
@@ -93,7 +84,7 @@ public class AdoJobStoreSmokeTest
     [TestCaseSource(nameof(GetSerializerTypes))]
     public async Task TestSQLiteMicrosoft(string serializerType)
     {
-        var dbFilename = $"test-{serializerType}.db";
+        var dbFilename = $"test-sqlite-ms-{serializerType}.db";
 
         if (File.Exists(dbFilename))
         {
@@ -150,7 +141,7 @@ public class AdoJobStoreSmokeTest
     [TestCaseSource(nameof(GetSerializerTypes))]
     public async Task TestSQLite(string serializerType)
     {
-        var dbFilename = $"test-{serializerType}.db";
+        var dbFilename = $"test-sqlite-{serializerType}.db";
 
         while (File.Exists(dbFilename))
         {
@@ -175,7 +166,7 @@ public class AdoJobStoreSmokeTest
         await RunAdoJobStoreTest("SQLite", "SQLite", serializerType, properties, clustered: false);
     }
 
-    public static string[] GetSerializerTypes() => new[] { "json", "binary" };
+    public static string[] GetSerializerTypes() => ["stj", "newtonsoft"];
 
     private Task RunAdoJobStoreTest(string dbProvider, string connectionStringId, string serializerType)
     {
@@ -209,24 +200,35 @@ public class AdoJobStoreSmokeTest
                 });
             }
 
-            store.UseGenericDatabase(dbProvider, db =>
+            store.UseGenericDatabase(dbProvider, "server-01", db =>
                 db.ConnectionString = dbConnectionStrings[connectionStringId]
             );
 
-            if (serializerType == "json")
+            if (serializerType == "stj")
+            {
+                store.UseSystemTextJsonSerializer(j =>
+                {
+                    j.AddCalendarSerializer<CustomCalendar>(new CustomSystemTextJsonCalendarSerializer());
+                    j.AddTriggerSerializer<CustomTrigger>(new CustomSystemTextJsonTriggerSerializer());
+                });
+            }
+            else if (serializerType == "newtonsoft")
             {
                 store.UseNewtonsoftJsonSerializer(j =>
                 {
-                    j.AddCalendarSerializer<CustomCalendar>(new CustomCalendarSerializer());
+                    j.AddCalendarSerializer<CustomCalendar>(new CustomNewtonsoftCalendarSerializer());
+
+                    j.RegisterTriggerConverters = true;
+                    j.AddTriggerSerializer<CustomTrigger>(new CustomNewtonsoftTriggerSerializer());
                 });
             }
             else
             {
-                store.UseBinarySerializer();
+                throw new ArgumentException($"Cannot handle serializer type: {serializerType}", nameof(serializerType));
             }
         });
 
-        if (extraProperties != null)
+        if (extraProperties is not null)
         {
             foreach (string key in extraProperties.Keys)
             {
@@ -584,8 +586,7 @@ public class AdoJobStoreSmokeTest
     [TearDown]
     public async Task ShutdownSchedulers()
     {
-        var schedulers = await SchedulerRepository.Instance.LookupAll(CancellationToken.None);
-        foreach (var scheduler in schedulers)
+        foreach (var scheduler in SchedulerRepository.Instance.LookupAll())
         {
             await scheduler.Shutdown(CancellationToken.None);
         }

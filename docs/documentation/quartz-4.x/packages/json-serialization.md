@@ -8,6 +8,10 @@ JSON is recommended persistent format to store data in database for greenfield p
 You should also strongly consider setting useProperties to true to restrict key-values to be strings.
 :::
 
+::: tip
+You might want to consider using [System.Text.Json](../packages/system-text-json) for JSON serialization.
+:::
+
 ## JSON.NET
 
 [Quartz.Serialization.Newtonsoft](https://www.nuget.org/packages/Quartz.Serialization.Newtonsoft) provides JSON serialization support for job stores using
@@ -105,7 +109,7 @@ public class MigratorSerializer : IObjectSerializer
 
 ### Customizing JSON.NET
 
- If you need to customize JSON.NET settings, you need to inherit custom implementation and override `CreateSerializerSettings`.
+If you need to customize JSON.NET settings, you need to inherit custom implementation and override `CreateSerializerSettings`.
 
 ```csharp
 class CustomJsonSerializer : JsonObjectSerializer
@@ -116,14 +120,14 @@ class CustomJsonSerializer : JsonObjectSerializer
         settings.Converters.Add(new MyCustomConverter());
         return settings;
     }
-} 
+}
 ```
 
 **And then configure it to use**
 
 ```csharp
 store.UseSerializer<CustomJsonSerializer>();
-// or 
+// or
 "quartz.serializer.type" = "MyProject.CustomJsonSerializer, MyProject"
 ```
 

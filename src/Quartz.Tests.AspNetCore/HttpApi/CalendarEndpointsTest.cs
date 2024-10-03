@@ -1,8 +1,7 @@
 using FakeItEasy;
 
 using FluentAssertions;
-
-using NUnit.Framework;
+using FluentAssertions.Execution;
 
 using Quartz.Impl.Calendar;
 using Quartz.Tests.AspNetCore.Support;
@@ -14,13 +13,15 @@ public class CalendarEndpointsTest : WebApiTest
     [Test]
     public async Task GetCalendarNamesShouldWork()
     {
-        A.CallTo(() => FakeScheduler.GetCalendarNames(A<CancellationToken>._)).Returns(new[] { "Calendar 1", "Calendar 2" });
+        A.CallTo(() => FakeScheduler.GetCalendarNames(A<CancellationToken>._)).Returns(["Calendar 1", "Calendar 2"]);
 
         var calendarNames = await HttpScheduler.GetCalendarNames();
-
-        calendarNames.Count.Should().Be(2);
-        calendarNames.Should().ContainSingle(x => x == "Calendar 1");
-        calendarNames.Should().ContainSingle(x => x == "Calendar 2");
+        using (new AssertionScope())
+        {
+            calendarNames.Count.Should().Be(2);
+            calendarNames.Should().ContainSingle(x => x == "Calendar 1");
+            calendarNames.Should().ContainSingle(x => x == "Calendar 2");
+        }
     }
 
     [Test]

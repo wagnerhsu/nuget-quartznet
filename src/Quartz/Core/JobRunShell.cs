@@ -19,11 +19,13 @@
 
 #endregion
 
+using System.Diagnostics;
+
 using Microsoft.Extensions.Logging;
 
 using Quartz.Impl;
 using Quartz.Listener;
-using Quartz.Logging;
+using Quartz.Diagnostics;
 using Quartz.Spi;
 
 using LogLevel = Microsoft.Extensions.Logging.LogLevel;
@@ -52,9 +54,6 @@ namespace Quartz.Core;
 public class JobRunShell : SchedulerListenerSupport
 {
     private readonly ILogger<JobRunShell> logger;
-#if DIAGNOSTICS_SOURCE
-    private readonly JobDiagnosticsWriter jobExecutionJobDiagnostics = new JobDiagnosticsWriter();
-#endif
 
     private JobExecutionContextImpl? jec;
     private QuartzScheduler? qs;
@@ -163,7 +162,7 @@ public class JobRunShell : SchedulerListenerSupport
                 {
                     try
                     {
-                        instCode = trigger.ExecutionComplete(jec, null);
+                        instCode = trigger.ExecutionComplete(jec, result: null);
                         await qs.NotifyJobStoreJobVetoed(trigger, jobDetail, instCode, cancellationToken).ConfigureAwait(false);
 
                         // Even if trigger got vetoed, we still needs to check to see if it's the trigger's finalized run or not.
@@ -171,7 +170,7 @@ public class JobRunShell : SchedulerListenerSupport
                         {
                             await qs.NotifySchedulerListenersFinalized(jec.Trigger, cancellationToken).ConfigureAwait(false);
                         }
-                        Complete(true);
+                        Complete(successfulExecution: true);
                     }
                     catch (SchedulerException se)
                     {
@@ -181,59 +180,49 @@ public class JobRunShell : SchedulerListenerSupport
                     break;
                 }
 
-                DateTimeOffset startTime = SystemTime.UtcNow();
-                DateTimeOffset endTime;
+                if (logger.IsEnabled(LogLevel.Debug))
+                {
+                    logger.LogDebug("Calling Execute on job {JobKey}", jobDetail.Key);
+                }
 
-#if DIAGNOSTICS_SOURCE
-                System.Diagnostics.Activity? activity = null;
-#endif
+                TimeProvider timeProvider = qs.resources.TimeProvider;
+                long startTimestamp = timeProvider.GetTimestamp();
+                long endTimestamp;
+
+                StartedActivity activity = QuartzActivitySource.StartJobExecute(jec, timeProvider.GetUtcNow());
+                Instrumentation instrumentation = Meters.StartJobExecute(jec);
+
 
                 // Execute the job
                 try
                 {
-                    if (logger.IsEnabled(LogLevel.Debug))
-                    {
-                        logger.LogDebug("Calling Execute on job {JobKey}", jobDetail.Key);
-                    }
-
-#if DIAGNOSTICS_SOURCE
-                    activity = jobExecutionJobDiagnostics.WriteStarted(jec, startTime);
-#endif
-
                     await job.Execute(jec).ConfigureAwait(false);
-
-                    endTime = SystemTime.UtcNow();
+                    endTimestamp = timeProvider.GetTimestamp();
                 }
-                catch (OperationCanceledException)
-                    when (jec.CancellationToken.IsCancellationRequested)
+                catch (OperationCanceledException) when (jec.CancellationToken.IsCancellationRequested)
                 {
-                    endTime = SystemTime.UtcNow();
+                    endTimestamp = timeProvider.GetTimestamp();
                     logger.LogInformation("Job {JobDetailKey} was cancelled", jobDetail.Key);
                 }
                 catch (JobExecutionException jee)
                 {
-                    endTime = SystemTime.UtcNow();
+                    endTimestamp = timeProvider.GetTimestamp();
                     jobExEx = jee;
-#if DIAGNOSTICS_SOURCE
-                    jobExecutionJobDiagnostics.WriteException(activity, jobExEx);
-#endif
-                    logger.LogError(jobExEx, "Job {JobDetailKey} threw a JobExecutionException: ", jobDetail.Key);
+                    logger.LogError(jee, "Job {JobDetailKey} threw a JobExecutionException: ", jobDetail.Key);
                 }
                 catch (Exception e)
                 {
-                    endTime = SystemTime.UtcNow();
+                    endTimestamp = timeProvider.GetTimestamp();
                     logger.LogError(e, "Job {JobDetailKey} threw an unhandled Exception: ", jobDetail.Key);
-                    SchedulerException se = new SchedulerException("Job threw an unhandled exception.", e);
-                    string msg = $"Job {jec.JobDetail.Key} threw an exception.";
-                    await qs.NotifySchedulerListenersError(msg, se, cancellationToken).ConfigureAwait(false);
-                    jobExEx = new JobExecutionException(se, false);
+                    SchedulerException se = new("Job threw an unhandled exception.", e);
+                    await qs.NotifySchedulerListenersError($"Job {jec.JobDetail.Key} threw an exception.", se, cancellationToken).ConfigureAwait(false);
+                    jobExEx = new JobExecutionException(se, refireImmediately: false);
                 }
 
-                jec.JobRunTime = endTime - startTime;
+                jec.JobRunTime = timeProvider.GetElapsedTime(startTimestamp, endTimestamp);
 
-#if DIAGNOSTICS_SOURCE
-                jobExecutionJobDiagnostics.WriteStopped(activity, endTime, jec);
-#endif
+                activity.Stop(timeProvider.GetUtcNow(), jobExEx);
+                instrumentation.EndJobExecute(jec.JobRunTime, jobExEx);
 
                 // notify all job listeners
                 if (!await NotifyJobListenersComplete(qs, jec, jobExEx, cancellationToken).ConfigureAwait(false))
@@ -274,7 +263,7 @@ public class JobRunShell : SchedulerListenerSupport
                     jec.IncrementRefireCount();
                     try
                     {
-                        Complete(false);
+                        Complete(successfulExecution: false);
                     }
                     catch (SchedulerException se)
                     {
@@ -285,7 +274,7 @@ public class JobRunShell : SchedulerListenerSupport
 
                 try
                 {
-                    Complete(true);
+                    Complete(successfulExecution: true);
                 }
                 catch (SchedulerException se)
                 {
@@ -301,7 +290,7 @@ public class JobRunShell : SchedulerListenerSupport
         finally
         {
             qs.RemoveInternalSchedulerListener(this);
-            qs.JobFactory.ReturnJob(job);
+            await qs.JobFactory.ReturnJob(job).ConfigureAwait(false);
             jec.Dispose();
         }
     }
@@ -352,12 +341,8 @@ public class JobRunShell : SchedulerListenerSupport
         {
             try
             {
-#if DIAGNOSTICS_SOURCE
-                if (LogProvider.Cached.Default.Value.IsEnabled(OperationName.Job.Veto))
-                {
-                    LogProvider.Cached.Default.Value.Write(OperationName.Job.Veto, ctx);
-                }
-#endif
+                using Activity? activity = QuartzActivitySource.Instance.StartActivity(OperationName.Job.Veto);
+                activity?.EnrichFrom(ctx);
 
                 await qs.NotifyJobListenersWasVetoed(ctx, cancellationToken).ConfigureAwait(false);
             }

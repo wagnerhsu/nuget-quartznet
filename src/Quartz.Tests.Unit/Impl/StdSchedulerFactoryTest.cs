@@ -23,8 +23,6 @@ using System.Collections.Specialized;
 
 using FluentAssertions;
 
-using NUnit.Framework;
-
 using Quartz.Impl;
 
 namespace Quartz.Tests.Unit.Impl;
@@ -88,7 +86,7 @@ public class StdSchedulerFactoryTest
 
         factory.Initialize();
         var scheduler = await factory.GetScheduler();
-        Assert.AreEqual("QuartzScheduler", scheduler.SchedulerName);
+        Assert.That(scheduler.SchedulerName, Is.EqualTo("QuartzScheduler"));
 
         Environment.SetEnvironmentVariable("quartz.scheduler.instanceName", "fromSystemProperties");
         // Make sure to pass the serializer type as an env var instead of in a NameValueCollection (as in the previous test)
@@ -96,7 +94,7 @@ public class StdSchedulerFactoryTest
         Environment.SetEnvironmentVariable("quartz.serializer.type", TestConstants.DefaultSerializerType);
         factory = new StdSchedulerFactory();
         scheduler = await factory.GetScheduler();
-        Assert.AreEqual("fromSystemProperties", scheduler.SchedulerName);
+        Assert.That(scheduler.SchedulerName, Is.EqualTo("fromSystemProperties"));
     }
 
     [Test]
@@ -125,7 +123,7 @@ public class StdSchedulerFactoryTest
             factory.Initialize(); // <- optional, because `GetScheduler` does it anyway
             var scheduler = await factory.GetScheduler();
 
-            Assert.AreEqual(InstanceName, scheduler.SchedulerName);
+            Assert.That(scheduler.SchedulerName, Is.EqualTo(InstanceName));
         }
         finally
         {

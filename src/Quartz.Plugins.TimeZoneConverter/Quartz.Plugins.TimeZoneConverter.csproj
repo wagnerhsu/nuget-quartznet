@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>net472;netstandard2.0</TargetFrameworks>
+    <TargetFramework>net8.0</TargetFramework>
     <RootNamespace>Quartz</RootNamespace>
     <Title>Quartz.NET TimeZoneConverter integration</Title>
     <Description>Quartz.NET TimeZoneConverter integration https://github.com/mj1856/TimeZoneConverter; $(Description)</Description>
@@ -19,7 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Quartz.Plugins\Quartz.Plugins.csproj" />
+    <ProjectReference Include="..\Quartz\Quartz.csproj" />
 
   </ItemGroup>
 </Project>

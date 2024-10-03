@@ -1,7 +1,5 @@
 using Newtonsoft.Json;
 
-using NUnit.Framework;
-
 using Quartz.Impl.Triggers;
 using Quartz.Tests.Unit.Utils;
 
@@ -26,13 +24,20 @@ public class AbstractTriggerTest
 
         AbstractTrigger cloned = trigger.DeepClone();
 
-        Assert.That(cloned.Key, Is.EqualTo(trigger.Key));
-        Assert.That(cloned.JobKey, Is.EqualTo(trigger.JobKey));
+        Assert.Multiple(() =>
+        {
+            Assert.That(cloned.Key, Is.EqualTo(trigger.Key));
+            Assert.That(cloned.JobKey, Is.EqualTo(trigger.JobKey));
+        });
     }
 
     [Serializable]
     private class TestTrigger : AbstractTrigger
     {
+        public TestTrigger() : base(TimeProvider.System)
+        {
+        }
+
         public override IScheduleBuilder GetScheduleBuilder()
         {
             throw new NotImplementedException();

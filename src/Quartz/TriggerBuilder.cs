@@ -64,9 +64,10 @@ namespace Quartz;
 /// <seealso cref="ITrigger" />
 public sealed class TriggerBuilder
 {
+    private readonly TimeProvider timeProvider;
     private TriggerKey? key;
     private string? description;
-    private DateTimeOffset startTime = SystemTime.UtcNow();
+    private DateTimeOffset startTime;
     private DateTimeOffset? endTime;
     private int priority = TriggerConstants.DefaultPriority;
     private string? calendarName;
@@ -75,8 +76,10 @@ public sealed class TriggerBuilder
 
     private IScheduleBuilder? scheduleBuilder;
 
-    internal TriggerBuilder()
+    internal TriggerBuilder(TimeProvider timeProvider)
     {
+        this.timeProvider = timeProvider;
+        this.startTime = timeProvider.GetUtcNow();
     }
 
     /// <summary>
@@ -85,10 +88,11 @@ public sealed class TriggerBuilder
     /// </summary>
     /// <remarks>
     /// </remarks>
+    /// <param name="timeProvider">Time provider instance to use, defaults to <see cref="TimeProvider.System"/></param>
     /// <returns>the new TriggerBuilder</returns>
-    public static TriggerBuilder Create()
+    public static TriggerBuilder Create(TimeProvider? timeProvider = null)
     {
-        return new TriggerBuilder();
+        return new TriggerBuilder(timeProvider ?? TimeProvider.System);
     }
 
     /// <summary>
@@ -99,7 +103,7 @@ public sealed class TriggerBuilder
     /// <returns>a Trigger that meets the specifications of the builder.</returns>
     public ITrigger Build()
     {
-        if (scheduleBuilder == null)
+        if (scheduleBuilder is null)
         {
             scheduleBuilder = SimpleScheduleBuilder.Create();
         }
@@ -109,12 +113,12 @@ public sealed class TriggerBuilder
         trig.Description = description;
         trig.StartTimeUtc = startTime;
         trig.EndTimeUtc = endTime;
-        if (key == null)
+        if (key is null)
         {
             key = new TriggerKey(Guid.NewGuid().ToString());
         }
         trig.Key = key;
-        if (jobKey != null)
+        if (jobKey is not null)
         {
             trig.JobKey = jobKey;
         }
@@ -258,7 +262,7 @@ public sealed class TriggerBuilder
     /// <seealso cref="ITrigger.StartTimeUtc" />
     public TriggerBuilder StartNow()
     {
-        startTime = SystemTime.UtcNow();
+        startTime = timeProvider.GetUtcNow();
         return this;
     }
 
@@ -358,7 +362,7 @@ public sealed class TriggerBuilder
     public TriggerBuilder ForJob(IJobDetail jobDetail)
     {
         JobKey k = jobDetail.Key;
-        if (k.Name == null)
+        if (k.Name is null)
         {
             ThrowHelper.ThrowArgumentException("The given job has not yet had a name assigned to it.");
         }

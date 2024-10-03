@@ -13,7 +13,7 @@ public class SchedulerHelper
     {
         DatabaseHelper.RegisterDatabaseSettingsForProvider(provider, out var driverDelegateType);
 
-        var serializer = new JsonObjectSerializer();
+        var serializer = new NewtonsoftJsonObjectSerializer();
         serializer.Initialize();
         var jobStore = new JobStoreTX
         {
@@ -25,6 +25,6 @@ public class SchedulerHelper
         };
 
         await DirectSchedulerFactory.Instance.CreateScheduler(name + "Scheduler", "AUTO", new DefaultThreadPool(), jobStore);
-        return await SchedulerRepository.Instance.Lookup(name + "Scheduler");
+        return SchedulerRepository.Instance.Lookup(name + "Scheduler");
     }
 }

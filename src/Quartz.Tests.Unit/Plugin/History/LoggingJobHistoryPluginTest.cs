@@ -19,8 +19,6 @@
 
 #endregion
 
-using NUnit.Framework;
-
 using Quartz.Impl;
 using Quartz.Impl.Triggers;
 using Quartz.Job;
@@ -47,7 +45,7 @@ public class LoggingJobHistoryPluginTest
         JobExecutionException ex = new JobExecutionException("test error");
         await plugin.JobWasExecuted(CreateJobExecutionContext(), ex);
 
-        Assert.That(plugin.WarnMessages.Count, Is.EqualTo(1));
+        Assert.That(plugin.WarnMessages, Has.Count.EqualTo(1));
     }
 
     [Test]
@@ -55,7 +53,7 @@ public class LoggingJobHistoryPluginTest
     {
         await plugin.JobWasExecuted(CreateJobExecutionContext(), null);
 
-        Assert.That(plugin.InfoMessages.Count, Is.EqualTo(1));
+        Assert.That(plugin.InfoMessages, Has.Count.EqualTo(1));
     }
 
     [Test]
@@ -63,15 +61,15 @@ public class LoggingJobHistoryPluginTest
     {
         await plugin.JobToBeExecuted(CreateJobExecutionContext());
 
-        Assert.That(plugin.InfoMessages.Count, Is.EqualTo(1));
+        Assert.That(plugin.InfoMessages, Has.Count.EqualTo(1));
     }
 
     [Test]
-    public void TestJobWasVetoedMessage()
+    public async Task TestJobWasVetoedMessage()
     {
-        plugin.JobExecutionVetoed(CreateJobExecutionContext());
+        await plugin.JobExecutionVetoed(CreateJobExecutionContext());
 
-        Assert.That(plugin.InfoMessages.Count, Is.EqualTo(1));
+        Assert.That(plugin.InfoMessages, Has.Count.EqualTo(1));
     }
 
     protected virtual ICancellableJobExecutionContext CreateJobExecutionContext()

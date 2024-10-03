@@ -1,5 +1,5 @@
 using System.Collections.Specialized;
-using NUnit.Framework;
+
 using Quartz.Impl;
 using Quartz.Listener;
 
@@ -17,14 +17,18 @@ namespace Quartz.Tests.Unit;
 public class JobExecutionAttributesInterfaceInheritanceTest
 {
     private static readonly TimeSpan jobBlockTime = TimeSpan.FromMilliseconds(300);
-    private static readonly List<DateTime> jobExecDates = new List<DateTime>();
-    private static readonly AutoResetEvent barrier = new AutoResetEvent(false);
+    private static readonly List<DateTime> jobExecDates = [];
+    private static readonly AutoResetEvent barrier = new(false);
 
+    [OneTimeTearDown]
+    public void TearDown()
+    {
+        barrier.Dispose();
+    }
+    
     [PersistJobDataAfterExecution]
     [DisallowConcurrentExecution]
-    public interface ITestJob : IJob
-    {
-    }
+    public interface ITestJob : IJob;
 
     public class TestJob : ITestJob
     {
@@ -48,7 +52,7 @@ public class JobExecutionAttributesInterfaceInheritanceTest
 
         public override string Name => "TestJobListener";
 
-        public override ValueTask JobWasExecuted(
+        public override async ValueTask JobWasExecuted(
             IJobExecutionContext context,
             JobExecutionException jobException,
             CancellationToken cancellationToken = default)
@@ -61,11 +65,10 @@ public class JobExecutionAttributesInterfaceInheritanceTest
                 }
                 catch (Exception e)
                 {
-                    Console.Error.WriteLine(e.ToString());
+                    await Console.Error.WriteLineAsync(e.ToString());
                     throw new AssertionException("Await on barrier was interrupted: " + e);
                 }
             }
-            return default;
         }
     }
 
@@ -79,8 +82,11 @@ public class JobExecutionAttributesInterfaceInheritanceTest
     public void TestWhetherAttributesAreInheritedFromInterfaces()
     {
         IJobDetail job = JobBuilder.Create<TestJob>().Build();
-        Assert.IsTrue(job.PersistJobDataAfterExecution);
-        Assert.IsTrue(job.ConcurrentExecutionDisallowed);
+        Assert.Multiple(() =>
+        {
+            Assert.That(job.PersistJobDataAfterExecution, Is.True);
+            Assert.That(job.ConcurrentExecutionDisallowed, Is.True);
+        });
     }
 
     [Test]
@@ -108,8 +114,11 @@ public class JobExecutionAttributesInterfaceInheritanceTest
         barrier.WaitOne();
         await scheduler.Shutdown(true);
 
-        Assert.AreEqual(2, jobExecDates.Count);
-        Assert.That((jobExecDates[1] - jobExecDates[0]).TotalMilliseconds, Is.GreaterThanOrEqualTo(jobBlockTime.TotalMilliseconds).Within(5d));
+        Assert.Multiple(() =>
+        {
+            Assert.That(jobExecDates, Has.Count.EqualTo(2));
+            Assert.That((jobExecDates[1] - jobExecDates[0]).TotalMilliseconds, Is.GreaterThanOrEqualTo(jobBlockTime.TotalMilliseconds).Within(5d));
+        });
     }
 
     /** QTZ-202 */
@@ -141,7 +150,10 @@ public class JobExecutionAttributesInterfaceInheritanceTest
         barrier.WaitOne();
         await scheduler.Shutdown(true);
 
-        Assert.AreEqual(2, jobExecDates.Count);
-        Assert.That((jobExecDates[1] - jobExecDates[0]).TotalMilliseconds, Is.GreaterThanOrEqualTo(jobBlockTime.TotalMilliseconds).Within(5));
+        Assert.Multiple(() =>
+        {
+            Assert.That(jobExecDates, Has.Count.EqualTo(2));
+            Assert.That((jobExecDates[1] - jobExecDates[0]).TotalMilliseconds, Is.GreaterThanOrEqualTo(jobBlockTime.TotalMilliseconds).Within(5));
+        });
     }
 }

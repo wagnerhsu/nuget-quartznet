@@ -1,17 +1,17 @@
 using System.Runtime.Serialization;
+using System.Text.Json;
 
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-
-using NUnit.Framework;
 
 using Quartz.Impl.Calendar;
 using Quartz.Impl.Matchers;
 using Quartz.Impl.Triggers;
 using Quartz.Job;
+using Quartz.Serialization.Newtonsoft;
 using Quartz.Spi;
 using Quartz.Tests.Integration.Impl.AdoJobStore;
-using Quartz.Tests.Integration.Utils;
+using Quartz.Triggers;
 using Quartz.Util;
 
 namespace Quartz.Tests.Integration.Impl;
@@ -34,13 +34,13 @@ public class SmokeTestPerformer
 
                 // QRTZNET-86
                 ITrigger t = await scheduler.GetTrigger(new TriggerKey("NonExistingTrigger", "NonExistingGroup"));
-                Assert.IsNull(t);
+                Assert.That(t, Is.Null);
 
                 AnnualCalendar cal = new AnnualCalendar();
                 cal.SetDayExcluded(new DateTime(2018, 7, 4), true);
                 await scheduler.AddCalendar("annualCalendar", cal, false, true);
 
-                IOperableTrigger calendarsTrigger = new SimpleTriggerImpl("calendarsTrigger", "test", 20, TimeSpan.FromMilliseconds(5));
+                IOperableTrigger calendarsTrigger = new SimpleTriggerImpl("calendarsTrigger", "test", 20, TimeSpan.FromHours(2));
                 calendarsTrigger.CalendarName = "annualCalendar";
 
                 var jd = JobBuilder.Create<NoOpJob>()
@@ -70,7 +70,7 @@ public class SmokeTestPerformer
                 Assert.That(customCalendar, Is.Not.Null);
                 Assert.That(customCalendar.SomeCustomProperty, Is.True);
 
-                Assert.IsNotNull(await scheduler.GetCalendar("annualCalendar"));
+                Assert.That(await scheduler.GetCalendar("annualCalendar"), Is.Not.Null);
 
                 var lonelyJob = JobBuilder.Create()
                     .OfType<SimpleRecoveryJob>()
@@ -102,8 +102,8 @@ public class SmokeTestPerformer
 
                 // check that trigger was stored
                 ITrigger persisted = await scheduler.GetTrigger(new TriggerKey("trig_" + count, schedId));
-                Assert.IsNotNull(persisted);
-                Assert.IsTrue(persisted is SimpleTriggerImpl);
+                Assert.That(persisted, Is.Not.Null);
+                Assert.That(persisted is SimpleTriggerImpl, Is.True);
 
                 count++;
                 job = JobBuilder.Create()
@@ -257,6 +257,24 @@ public class SmokeTestPerformer
                 var loadedCustomTimeZoneTrigger = (ICronTrigger) await scheduler.GetTrigger(customTimeZoneTrigger.Key);
                 Assert.That(loadedCustomTimeZoneTrigger.TimeZone.BaseUtcOffset, Is.EqualTo(TimeSpan.FromMinutes(22)));
 
+                // custom trigger blob serialization
+                var customTrigger = new CustomTrigger
+                {
+                    Key = new TriggerKey("customTrigger"),
+                    CronExpressionString = "30 45 18 * * ?",
+                    StartTimeUtc = DateTimeOffset.UtcNow,
+                    JobKey = job.Key
+                };
+
+                customTrigger.ComputeFirstFireTimeUtc(null);
+                var nextFireTimeUtc = customTrigger.GetNextFireTimeUtc();
+
+                await scheduler.ScheduleJob(customTrigger);
+                var loadedCustomTrigger = (CustomTrigger) await scheduler.GetTrigger(customTrigger.Key);
+                Assert.That(loadedCustomTrigger.GetNextFireTimeUtc(), Is.EqualTo(nextFireTimeUtc));
+                Assert.That(loadedCustomTrigger.CronExpressionString, Is.EqualTo(customTrigger.CronExpressionString));
+                Assert.That(loadedCustomTrigger.SomeCustomProperty, Is.True);
+
                 // bulk operations
                 var info = new Dictionary<IJobDetail, IReadOnlyCollection<ITrigger>>();
                 IJobDetail detail = JobBuilder.Create<SimpleRecoveryJob>()
@@ -269,19 +287,19 @@ public class SmokeTestPerformer
 
                 await scheduler.ScheduleJobs(info, true);
 
-                Assert.IsTrue(await scheduler.CheckExists(detail.Key));
-                Assert.IsTrue(await scheduler.CheckExists(simple.Key));
+                Assert.That(await scheduler.CheckExists(detail.Key), Is.True);
+                Assert.That(await scheduler.CheckExists(simple.Key), Is.True);
 
                 // QRTZNET-243
-                await scheduler.GetJobKeys(GroupMatcher<JobKey>.GroupContains("a").DeepClone());
-                await scheduler.GetJobKeys(GroupMatcher<JobKey>.GroupEndsWith("a").DeepClone());
-                await scheduler.GetJobKeys(GroupMatcher<JobKey>.GroupStartsWith("a").DeepClone());
-                await scheduler.GetJobKeys(GroupMatcher<JobKey>.GroupEquals("a").DeepClone());
+                await scheduler.GetJobKeys(GroupMatcher<JobKey>.GroupContains("a"));
+                await scheduler.GetJobKeys(GroupMatcher<JobKey>.GroupEndsWith("a"));
+                await scheduler.GetJobKeys(GroupMatcher<JobKey>.GroupStartsWith("a"));
+                await scheduler.GetJobKeys(GroupMatcher<JobKey>.GroupEquals("a"));
 
-                await scheduler.GetTriggerKeys(GroupMatcher<TriggerKey>.GroupContains("a").DeepClone());
-                await scheduler.GetTriggerKeys(GroupMatcher<TriggerKey>.GroupEndsWith("a").DeepClone());
-                await scheduler.GetTriggerKeys(GroupMatcher<TriggerKey>.GroupStartsWith("a").DeepClone());
-                await scheduler.GetTriggerKeys(GroupMatcher<TriggerKey>.GroupEquals("a").DeepClone());
+                await scheduler.GetTriggerKeys(GroupMatcher<TriggerKey>.GroupContains("a"));
+                await scheduler.GetTriggerKeys(GroupMatcher<TriggerKey>.GroupEndsWith("a"));
+                await scheduler.GetTriggerKeys(GroupMatcher<TriggerKey>.GroupStartsWith("a"));
+                await scheduler.GetTriggerKeys(GroupMatcher<TriggerKey>.GroupEquals("a"));
 
                 await scheduler.Start();
 
@@ -307,15 +325,15 @@ public class SmokeTestPerformer
                 await scheduler.PauseTriggers(GroupMatcher<TriggerKey>.GroupEquals(schedId));
 
                 var pausedTriggerGroups = await scheduler.GetPausedTriggerGroups();
-                Assert.AreEqual(1, pausedTriggerGroups.Count);
+                Assert.That(pausedTriggerGroups.Count, Is.EqualTo(1));
 
                 await Task.Delay(TimeSpan.FromSeconds(3));
                 await scheduler.ResumeTriggers(GroupMatcher<TriggerKey>.GroupEquals(schedId));
 
-                Assert.IsNotNull(scheduler.GetTrigger(new TriggerKey("trig_2", schedId)));
-                Assert.IsNotNull(scheduler.GetJobDetail(new JobKey("job_1", schedId)));
-                Assert.IsNotNull(scheduler.GetMetaData());
-                Assert.IsNotNull(scheduler.GetCalendar("weeklyCalendar"));
+                Assert.That(await scheduler.GetTrigger(new TriggerKey("trig_2", schedId)), Is.Not.Null);
+                Assert.That(await scheduler.GetJobDetail(new JobKey("job_1", schedId)), Is.Not.Null);
+                Assert.That(await scheduler.GetMetaData(), Is.Not.Null);
+                Assert.That(await scheduler.GetCalendar("weeklyCalendar"), Is.Not.Null);
 
                 var genericjobKey = new JobKey("genericJob", "genericGroup");
                 GenericJobType.Reset();
@@ -335,11 +353,13 @@ public class SmokeTestPerformer
                 Assert.That(GenericJobType.TriggeredCount, Is.EqualTo(1));
                 await scheduler.Standby();
 
-                CollectionAssert.IsNotEmpty(await scheduler.GetCalendarNames());
-                CollectionAssert.IsNotEmpty(await scheduler.GetJobKeys(GroupMatcher<JobKey>.GroupEquals(schedId)));
+                Assert.That(await scheduler.GetCalendarNames(), Is.Not.Empty);
+                Assert.That(await scheduler.GetJobKeys(GroupMatcher<JobKey>.GroupEquals(schedId)), Is.Not.Empty);
 
-                CollectionAssert.IsNotEmpty(await scheduler.GetTriggersOfJob(new JobKey("job_2", schedId)));
-                Assert.IsNotNull(scheduler.GetJobDetail(new JobKey("job_2", schedId)));
+                Assert.That(await scheduler.GetTriggersOfJob(new JobKey("job_2", schedId)), Is.Not.Empty);
+#pragma warning disable NUnit2023
+                Assert.That(scheduler.GetJobDetail(new JobKey("job_2", schedId)), Is.Not.Null);
+#pragma warning restore NUnit2023
 
                 await scheduler.DeleteCalendar("cronCalendar");
                 await scheduler.DeleteCalendar("holidayCalendar");
@@ -495,7 +515,7 @@ internal sealed class CustomCalendar : BaseCalendar
     }
 }
 
-internal sealed class CustomCalendarSerializer : CalendarSerializer<CustomCalendar>
+internal sealed class CustomNewtonsoftCalendarSerializer : CalendarSerializer<CustomCalendar>
 {
     protected override CustomCalendar Create(JObject source)
     {
@@ -511,5 +531,98 @@ internal sealed class CustomCalendarSerializer : CalendarSerializer<CustomCalend
     protected override void DeserializeFields(CustomCalendar calendar, JObject source)
     {
         calendar.SomeCustomProperty = source["SomeCustomProperty"]!.Value<bool>();
+    }
+}
+
+internal sealed class CustomSystemTextJsonCalendarSerializer : Serialization.Json.Calendars.CalendarSerializer<CustomCalendar>
+{
+    public override string CalendarTypeName => "Custom";
+
+    protected override CustomCalendar Create(JsonElement jsonElement, JsonSerializerOptions options)
+    {
+        return new CustomCalendar();
+    }
+
+    protected override void SerializeFields(Utf8JsonWriter writer, CustomCalendar calendar, JsonSerializerOptions options)
+    {
+        writer.WriteBoolean("SomeCustomProperty", calendar.SomeCustomProperty);
+    }
+
+    protected override void DeserializeFields(CustomCalendar calendar, JsonElement jsonElement, JsonSerializerOptions options)
+    {
+        calendar.SomeCustomProperty = jsonElement.GetProperty("SomeCustomProperty").GetBoolean();
+    }
+}
+
+[Serializable]
+internal sealed class CustomTrigger : CronTriggerImpl
+{
+    public override bool HasAdditionalProperties => true;
+
+    public bool SomeCustomProperty { get; set; } = true;
+}
+
+internal class CustomNewtonsoftTriggerSerializer : CronTriggerSerializer
+{
+    public override string TriggerTypeForJson => "CustomTrigger";
+
+    public override IScheduleBuilder CreateScheduleBuilder(JObject source)
+    {
+        return new CustomTriggerScheduleBuilder();
+    }
+
+    protected override void SerializeFields(JsonWriter writer, ICronTrigger trigger)
+    {
+        base.SerializeFields(writer, trigger);
+        writer.WritePropertyName("SomeCustomProperty");
+        writer.WriteValue(((CustomTrigger) trigger).SomeCustomProperty);
+    }
+
+    protected override void DeserializeFields(ICronTrigger trigger, JObject source)
+    {
+        base.DeserializeFields(trigger, source);
+        ((CustomTrigger) trigger).CronExpressionString = source.Value<string>("CronExpressionString");
+        ((CustomTrigger) trigger).TimeZone = TimeZoneUtil.FindTimeZoneById(source.Value<string>("TimeZone")!);
+        ((CustomTrigger) trigger).SomeCustomProperty = source.Value<bool>("SomeCustomProperty");
+    }
+
+    private class CustomTriggerScheduleBuilder : ScheduleBuilder<CustomTrigger>
+    {
+        public override IMutableTrigger Build()
+        {
+            return new CustomTrigger();
+        }
+    }
+}
+
+internal class CustomSystemTextJsonTriggerSerializer : Serialization.Json.Triggers.CronTriggerSerializer
+{
+    public override string TriggerTypeForJson => "CustomTrigger";
+
+    public override IScheduleBuilder CreateScheduleBuilder(JsonElement jsonElement, JsonSerializerOptions options)
+    {
+        return new CustomTriggerScheduleBuilder();
+    }
+
+    protected override void SerializeFields(Utf8JsonWriter writer, ICronTrigger trigger, JsonSerializerOptions options)
+    {
+        base.SerializeFields(writer, trigger, options);
+        writer.WriteBoolean("SomeCustomProperty", ((CustomTrigger) trigger).SomeCustomProperty);
+    }
+
+    protected override void DeserializeFields(ICronTrigger trigger, JsonElement jsonElement, JsonSerializerOptions options)
+    {
+        base.DeserializeFields(trigger, jsonElement, options);
+        ((CustomTrigger) trigger).CronExpressionString = jsonElement.GetProperty("CronExpressionString").GetString();
+        ((CustomTrigger) trigger).TimeZone = TimeZoneUtil.FindTimeZoneById(jsonElement.GetProperty("TimeZone").GetString());
+        ((CustomTrigger) trigger).SomeCustomProperty = jsonElement.GetProperty("SomeCustomProperty").GetBoolean();
+    }
+
+    private class CustomTriggerScheduleBuilder : ScheduleBuilder<CustomTrigger>
+    {
+        public override IMutableTrigger Build()
+        {
+            return new CustomTrigger();
+        }
     }
 }

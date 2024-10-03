@@ -19,7 +19,7 @@
 
 using Microsoft.Extensions.Logging;
 
-using Quartz.Logging;
+using Quartz.Diagnostics;
 using Quartz.Spi;
 using Quartz.Util;
 
@@ -86,9 +86,23 @@ public class SimpleJobFactory : IJobFactory
     /// Allows the job factory to destroy/cleanup the job if needed.
     /// No-op when using SimpleJobFactory.
     /// </summary>
-    public virtual void ReturnJob(IJob job)
+    public virtual ValueTask ReturnJob(IJob job)
     {
-        var disposable = job as IDisposable;
-        disposable?.Dispose();
+        if (job is IAsyncDisposable asyncDisposableJob)
+        {
+            return asyncDisposableJob.DisposeAsync();
+        }
+        if (job is IDisposable disposableJob)
+        {
+            disposableJob.Dispose();
+        }
+        // check for wrapped jobs only if the current job is not disposable
+        // disposable wrappers should handle inner disposal on it's own
+        else if (job is IJobWrapper jobWrapper)
+        {
+            return ReturnJob(jobWrapper.Target);
+        }
+
+        return default;
     }
 }

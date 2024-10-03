@@ -32,7 +32,7 @@ namespace Quartz.Util;
 /// </summary>
 /// <author>Aleksandar Seovic</author>
 /// <author>Marko Lahma</author>
-public static class ObjectUtils
+internal static class ObjectUtils
 {
     /// <summary>
     /// Convert the value to the required <see cref="System.Type"/> (if necessary from a string).
@@ -44,7 +44,7 @@ public static class ObjectUtils
     /// <returns>The new value, possibly the result of type conversion.</returns>
     public static object? ConvertValueIfNecessary(Type requiredType, object? newValue)
     {
-        if (newValue != null)
+        if (newValue is not null)
         {
             // if it is assignable, return the value right away
             if (requiredType.IsInstanceOfType(newValue))
@@ -58,15 +58,18 @@ public static class ObjectUtils
             {
                 return typeConverter.ConvertFrom(null, CultureInfo.InvariantCulture, newValue);
             }
+
             typeConverter = TypeDescriptor.GetConverter(newValue.GetType());
             if (typeConverter.CanConvertTo(requiredType))
             {
                 return typeConverter.ConvertTo(null, CultureInfo.InvariantCulture, newValue, requiredType);
             }
+
             if (requiredType == typeof(Type))
             {
-                return Type.GetType(newValue.ToString()!, true);
+                return Type.GetType(newValue.ToString()!, throwOnError: true);
             }
+
             if (newValue.GetType().IsEnum)
             {
                 // If we couldn't convert the type, but it's an enum type, try convert it as an int
@@ -97,23 +100,29 @@ public static class ObjectUtils
         return null;
     }
 
-
     /// <summary>
     /// Instantiates an instance of the type specified.
     /// </summary>
     public static T InstantiateType<T>(Type? type)
     {
-        if (type == null)
+        ConstructorInfo ci = GetDefaultConstructor(type);
+        return (T) ci.Invoke([]);
+    }
+
+    public static ConstructorInfo GetDefaultConstructor(Type? type)
+    {
+        if (type is null)
         {
             ThrowHelper.ThrowArgumentNullException(nameof(type), "Cannot instantiate null");
         }
 
         var ci = type.GetConstructor(Type.EmptyTypes);
-        if (ci == null)
+        if (ci is null)
         {
             ThrowHelper.ThrowArgumentException("Cannot instantiate type which has no empty constructor", type.Name);
         }
-        return (T) ci.Invoke(Array.Empty<object>());
+
+        return ci;
     }
 
     /// <summary>
@@ -172,13 +181,13 @@ public static class ObjectUtils
             Type t = tuple.ObjectType;
             var propertyInfo = t.GetProperty(name);
 
-            if (propertyInfo == null || !propertyInfo.CanWrite)
+            if (propertyInfo is null || !propertyInfo.CanWrite)
             {
                 // try to find from interfaces
                 foreach (var interfaceType in target.GetType().GetInterfaces())
                 {
                     propertyInfo = interfaceType.GetProperty(name);
-                    if (propertyInfo != null && propertyInfo.CanWrite)
+                    if (propertyInfo is not null && propertyInfo.CanWrite)
                     {
                         // found suitable
                         break;
@@ -189,7 +198,7 @@ public static class ObjectUtils
             return propertyInfo;
         });
 
-        if (pi == null)
+        if (pi is null)
         {
             // not match from anywhere
             ThrowHelper.ThrowMemberAccessException($"No writable property '{propertyName}' found");
@@ -197,7 +206,7 @@ public static class ObjectUtils
 
         var mi = pi.GetSetMethod();
 
-        if (mi == null)
+        if (mi is null)
         {
             ThrowHelper.ThrowMemberAccessException($"Property '{propertyName}' has no setter");
         }
@@ -212,7 +221,7 @@ public static class ObjectUtils
             value = ConvertValueIfNecessary(mi.GetParameters()[0].ParameterType, value);
         }
 
-        mi.Invoke(target, new[] { value });
+        mi.Invoke(target, [value]);
     }
 
     public static TimeSpan GetTimeSpanValueForProperty(PropertyInfo pi, object? value)
@@ -244,19 +253,24 @@ public static class ObjectUtils
 
     public static bool IsAttributePresent(Type typeToExamine, Type attributeType)
     {
-        return typeToExamine.GetCustomAttributes(attributeType, true).Any();
+        return typeToExamine.GetCustomAttributes(attributeType, inherit: true).Length > 0;
     }
 
     public static bool IsAnyInterfaceAttributePresent(Type typeToExamine, Type attributeType)
     {
         if (IsAttributePresent(typeToExamine, attributeType))
+        {
             return true;
+        }
 
         foreach (var type in typeToExamine.GetInterfaces())
         {
             if (IsAnyInterfaceAttributePresent(type, attributeType))
+            {
                 return true;
+            }
         }
+
         return false;
     }
 }

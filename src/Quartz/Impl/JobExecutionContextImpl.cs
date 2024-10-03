@@ -65,7 +65,9 @@ namespace Quartz.Impl;
 /// <author>James House</author>
 /// <author>Marko Lahma (.NET)</author>
 [Serializable]
+#pragma warning disable CA1708
 public sealed class JobExecutionContextImpl : ICancellableJobExecutionContext, IDisposable
+#pragma warning restore CA1708
 {
     private readonly ITrigger trigger;
     private readonly IJobDetail jobDetail;
@@ -175,11 +177,11 @@ public sealed class JobExecutionContextImpl : ICancellableJobExecutionContext, I
     {
         get
         {
-            if (jobDataMap == null)
+            if (jobDataMap is null)
             {
                 lock (lazyInitLock)
                 {
-                    if (jobDataMap == null)
+                    if (jobDataMap is null)
                     {
                         jobDataMap = new JobDataMap(jobDetail.JobDataMap.Count + trigger.JobDataMap.Count);
                         jobDataMap.PutAll(jobDetail.JobDataMap);
@@ -272,7 +274,7 @@ public sealed class JobExecutionContextImpl : ICancellableJobExecutionContext, I
     {
         get
         {
-            if (jobRunTime == null)
+            if (jobRunTime is null)
             {
                 // we are still in progress, calculate dynamically
                 return DateTimeOffset.UtcNow - FireTimeUtc;
@@ -292,10 +294,10 @@ public sealed class JobExecutionContextImpl : ICancellableJobExecutionContext, I
     }
 
     /// <summary>
-    /// Returns a <see cref="T:System.String"/> that represents the current <see cref="T:System.Object"/>.
+    /// Returns a <see cref="System.String"/> that represents the current <see cref="System.Object"/>.
     /// </summary>
     /// <returns>
-    /// A <see cref="T:System.String"/> that represents the current <see cref="T:System.Object"/>.
+    /// A <see cref="System.String"/> that represents the current <see cref="System.Object"/>.
     /// </returns>
     public override string ToString()
     {
@@ -354,11 +356,11 @@ public sealed class JobExecutionContextImpl : ICancellableJobExecutionContext, I
     {
         get
         {
-            if (cancellationTokenSource == null)
+            if (cancellationTokenSource is null)
             {
                 lock (lazyInitLock)
                 {
-                    if (cancellationTokenSource == null)
+                    if (cancellationTokenSource is null)
                     {
                         cancellationTokenSource = new CancellationTokenSource();
                     }
@@ -376,11 +378,11 @@ public sealed class JobExecutionContextImpl : ICancellableJobExecutionContext, I
     {
         get
         {
-            if (data == null)
+            if (data is null)
             {
                 lock (lazyInitLock)
                 {
-                    if (data == null)
+                    if (data is null)
                     {
                         data = new Dictionary<object, object>();
                     }

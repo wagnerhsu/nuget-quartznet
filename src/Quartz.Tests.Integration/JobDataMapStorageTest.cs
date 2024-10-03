@@ -1,6 +1,4 @@
-using NUnit.Framework;
-
-using Quartz.Impl;
+﻿using Quartz.Impl;
 using Quartz.Impl.AdoJobStore;
 using Quartz.Job;
 using Quartz.Simpl;
@@ -20,7 +18,6 @@ public class JobDataMapStorageTest : IntegrationTest
     }
 
     [Test]
-    [Category("db-sqlserver")]
     public async Task TestJobDataMapDirtyFlag()
     {
         IScheduler scheduler = await CreateScheduler("testBasicStorageFunctions");
@@ -52,7 +49,7 @@ public class JobDataMapStorageTest : IntegrationTest
     {
         DatabaseHelper.RegisterDatabaseSettingsForProvider(provider, out var driverDelegateType);
 
-        var serializer = new JsonObjectSerializer();
+        var serializer = new NewtonsoftJsonObjectSerializer();
         serializer.Initialize();
         var jobStore = new JobStoreTX
         {
@@ -64,6 +61,6 @@ public class JobDataMapStorageTest : IntegrationTest
         };
 
         await DirectSchedulerFactory.Instance.CreateScheduler(name + "Scheduler", "AUTO", new DefaultThreadPool(), jobStore);
-        return await SchedulerRepository.Instance.Lookup(name + "Scheduler");
+        return SchedulerRepository.Instance.Lookup(name + "Scheduler");
     }
 }

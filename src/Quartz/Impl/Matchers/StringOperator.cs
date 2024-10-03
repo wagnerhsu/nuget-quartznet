@@ -40,7 +40,7 @@ public abstract class StringOperator : IEquatable<StringOperator>
     {
         public override bool Evaluate(string value, string compareTo)
         {
-            return string.Equals(value, compareTo);
+            return value == compareTo;
         }
     }
 
@@ -49,7 +49,7 @@ public abstract class StringOperator : IEquatable<StringOperator>
     {
         public override bool Evaluate(string value, string compareTo)
         {
-            return value != null && value.StartsWith(compareTo);
+            return value is not null && value.StartsWith(compareTo);
         }
     }
 
@@ -58,7 +58,7 @@ public abstract class StringOperator : IEquatable<StringOperator>
     {
         public override bool Evaluate(string value, string compareTo)
         {
-            return value != null && value.EndsWith(compareTo);
+            return value is not null && value.EndsWith(compareTo);
         }
     }
 
@@ -67,7 +67,7 @@ public abstract class StringOperator : IEquatable<StringOperator>
     {
         public override bool Evaluate(string value, string compareTo)
         {
-            return value != null && value.Contains(compareTo);
+            return value is not null && value.Contains(compareTo);
         }
     }
 
@@ -107,16 +107,7 @@ public abstract class StringOperator : IEquatable<StringOperator>
     /// </returns>
     public virtual bool Equals(StringOperator? other)
     {
-#if !NET5_0_OR_GREATER
-        // This optimization should not be applied on .NET 5.0 (and higher) as GetType() and/or Type
-        // comparison has sped up significantly
-        if (ReferenceEquals(this, other))
-        {
-            return true;
-        }
-#endif
-
-        return other != null && GetType() == other.GetType();
+        return other is not null && GetType() == other.GetType();
     }
 
     /// <summary>

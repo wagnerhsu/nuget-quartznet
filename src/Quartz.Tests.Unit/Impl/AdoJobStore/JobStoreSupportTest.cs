@@ -3,8 +3,6 @@ using System.Reflection;
 
 using FakeItEasy;
 
-using NUnit.Framework;
-
 using Quartz.Impl.AdoJobStore;
 
 namespace Quartz.Tests.Unit.Impl.AdoJobStore;
@@ -59,7 +57,7 @@ public class JobStoreSupportTest
             set
             {
                 FieldInfo fieldInfo = typeof(JobStoreSupport).GetField("driverDelegate", BindingFlags.Instance | BindingFlags.NonPublic);
-                Assert.IsNotNull(fieldInfo);
+                Assert.That(fieldInfo, Is.Not.Null);
                 fieldInfo.SetValue(this, value);
             }
         }

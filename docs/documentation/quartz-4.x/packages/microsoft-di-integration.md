@@ -188,13 +188,13 @@ public void ConfigureServices(IServiceCollection services)
             s.PerformSchemaValidation = true; // default
             s.UseProperties = true; // preferred, but not default
             s.RetryInterval = TimeSpan.FromSeconds(15);
-            s.UseSqlServer(sqlServer =>
+            s.UseSqlServer("sql-server-01", sqlServer =>
             {
                 sqlServer.ConnectionString = "some connection string";
                 // this is the default
                 sqlServer.TablePrefix = "QRTZ_";
             });
-            s.UseNewtonsoftJsonSerializer();
+            s.UseSystemTextJsonSerializer();
             s.UseClustering(c =>
             {
                 c.CheckinMisfireThreshold = TimeSpan.FromSeconds(20);

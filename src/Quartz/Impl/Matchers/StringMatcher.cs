@@ -31,10 +31,6 @@ namespace Quartz.Impl.Matchers;
 [Serializable]
 public abstract class StringMatcher<TKey> : IMatcher<TKey> where TKey : Key<TKey>
 {
-    protected StringMatcher()
-    {
-    }
-
     protected StringMatcher(string compareTo, StringOperator compareWith)
     {
         if (compareTo is null)
@@ -67,7 +63,7 @@ public abstract class StringMatcher<TKey> : IMatcher<TKey> where TKey : Key<TKey
         {
             return true;
         }
-        if (obj == null)
+        if (obj is null)
         {
             return false;
         }
@@ -76,14 +72,14 @@ public abstract class StringMatcher<TKey> : IMatcher<TKey> where TKey : Key<TKey
             return false;
         }
         StringMatcher<TKey> other = (StringMatcher<TKey>) obj;
-        if (CompareToValue == null)
+        if (CompareToValue is null)
         {
-            if (other.CompareToValue != null)
+            if (other.CompareToValue is not null)
             {
                 return false;
             }
         }
-        else if (!CompareToValue.Equals(other.CompareToValue))
+        else if (CompareToValue != other.CompareToValue)
         {
             return false;
         }
@@ -94,6 +90,11 @@ public abstract class StringMatcher<TKey> : IMatcher<TKey> where TKey : Key<TKey
         return true;
     }
 
-    public string CompareToValue { get; private set; } = null!;
-    public StringOperator CompareWithOperator { get; private set; } = null!;
+    public string CompareToValue { get; }
+    public StringOperator CompareWithOperator { get; }
+
+    public override string ToString()
+    {
+        return $"{CompareWithOperator}({CompareToValue})";
+    }
 }

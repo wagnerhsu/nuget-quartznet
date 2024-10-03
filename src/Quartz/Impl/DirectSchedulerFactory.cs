@@ -20,7 +20,7 @@
 using Microsoft.Extensions.Logging;
 
 using Quartz.Core;
-using Quartz.Logging;
+using Quartz.Diagnostics;
 using Quartz.Simpl;
 using Quartz.Spi;
 
@@ -93,7 +93,7 @@ public sealed class DirectSchedulerFactory : ISchedulerFactory
     /// </summary>
     public ValueTask<IReadOnlyList<IScheduler>> GetAllSchedulers(CancellationToken cancellationToken = default)
     {
-        return SchedulerRepository.Instance.LookupAll(cancellationToken);
+        return new ValueTask<IReadOnlyList<IScheduler>>(SchedulerRepository.Instance.LookupAll());
     }
 
     /// <summary>
@@ -119,38 +119,6 @@ public sealed class DirectSchedulerFactory : ISchedulerFactory
         return CreateScheduler(threadPool, jobStore);
     }
 
-#if REMOTING
-    /// <summary>
-    /// Creates a proxy to a remote scheduler. This scheduler can be retrieved
-    /// via <see cref="DirectSchedulerFactory.GetScheduler(CancellationToken)" />.
-    /// </summary>
-    /// <throws>  SchedulerException </throws>
-    public void CreateRemoteScheduler(string proxyAddress)
-    {
-        CreateRemoteScheduler(DefaultSchedulerName, DefaultInstanceId, proxyAddress);
-    }
-
-    /// <summary>
-    /// Same as <see cref="DirectSchedulerFactory.CreateRemoteScheduler(string)" />,
-    /// with the addition of specifying the scheduler name and instance ID. This
-    /// scheduler can only be retrieved via <see cref="DirectSchedulerFactory.GetScheduler(string, CancellationToken)" />.
-    /// </summary>
-    /// <param name="schedulerName">The name for the scheduler.</param>
-    /// <param name="schedulerInstanceId">The instance ID for the scheduler.</param>
-    /// <param name="proxyAddress"></param>
-    /// <throws>  SchedulerException </throws>
-    private void CreateRemoteScheduler(string schedulerName, string schedulerInstanceId, string proxyAddress)
-    {
-        var proxyBuilder = new RemotingSchedulerProxyFactory();
-        proxyBuilder.Address = proxyAddress;
-        IScheduler remoteScheduler = proxyBuilder.GetProxy(schedulerName, schedulerInstanceId);
-
-        SchedulerRepository schedRep = SchedulerRepository.Instance;
-        schedRep.Bind(remoteScheduler);
-        initialized = true;
-    }
-#endif // REMOTING
-
     /// <summary>
     /// Creates a scheduler using the specified thread pool and job store, and with an idle wait time of
     /// <c>30</c> seconds. This scheduler can be retrieved via <see cref="GetScheduler(CancellationToken)"/>.
@@ -173,8 +141,7 @@ public sealed class DirectSchedulerFactory : ISchedulerFactory
     /// <param name="threadPool">The thread pool for executing jobs</param>
     /// <param name="jobStore">The type of job store</param>
     /// <exception cref="SchedulerException">Initialization failed.</exception>
-    public ValueTask CreateScheduler(string schedulerName, string schedulerInstanceId, IThreadPool threadPool,
-        IJobStore jobStore)
+    public ValueTask CreateScheduler(string schedulerName, string schedulerInstanceId, IThreadPool threadPool, IJobStore jobStore)
     {
         return CreateScheduler(schedulerName, schedulerInstanceId, threadPool, jobStore, QuartzSchedulerResources.DefaultIdleWaitTime);
     }
@@ -238,44 +205,6 @@ public sealed class DirectSchedulerFactory : ISchedulerFactory
     /// <param name="idleWaitTime">The idle wait time.</param>
     /// <param name="maxBatchSize">The maximum batch size of triggers, when acquiring them</param>
     /// <param name="batchTimeWindow">The time window for which it is allowed to "pre-acquire" triggers to fire</param>
-    /// <exception cref="SchedulerException">Initialization failed.</exception>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="idleWaitTime"/> is less than <see cref="TimeSpan.Zero"/>.</exception>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="maxBatchSize"/> is less than <c>1</c>.</exception>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="batchTimeWindow"/> is less than <see cref="TimeSpan.Zero"/>.</exception>
-    public ValueTask CreateScheduler(string schedulerName,
-        string schedulerInstanceId,
-        IThreadPool threadPool,
-        IJobStore jobStore,
-        IDictionary<string, ISchedulerPlugin>? schedulerPluginMap,
-        TimeSpan idleWaitTime,
-        int maxBatchSize,
-        TimeSpan batchTimeWindow)
-    {
-        return CreateScheduler(
-            schedulerName,
-            schedulerInstanceId,
-            threadPool,
-            jobStore,
-            schedulerPluginMap,
-            idleWaitTime,
-            maxBatchSize,
-            batchTimeWindow,
-            null);
-    }
-
-    /// <summary>
-    /// Creates a scheduler using the specified thread pool and job store and
-    /// binds it for remote access.
-    /// </summary>
-    /// <param name="schedulerName">The name for the scheduler.</param>
-    /// <param name="schedulerInstanceId">The instance ID for the scheduler.</param>
-    /// <param name="threadPool">The thread pool for executing jobs</param>
-    /// <param name="jobStore">The type of job store</param>
-    /// <param name="schedulerPluginMap"></param>
-    /// <param name="idleWaitTime">The idle wait time.</param>
-    /// <param name="maxBatchSize">The maximum batch size of triggers, when acquiring them</param>
-    /// <param name="batchTimeWindow">The time window for which it is allowed to "pre-acquire" triggers to fire</param>
-    /// <param name="schedulerExporter">The scheduler exporter to use</param>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="idleWaitTime"/> is less than <see cref="TimeSpan.Zero"/>.</exception>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="maxBatchSize"/> is less than <c>1</c>.</exception>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="batchTimeWindow"/> is less than <see cref="TimeSpan.Zero"/>.</exception>
@@ -286,8 +215,7 @@ public sealed class DirectSchedulerFactory : ISchedulerFactory
         IDictionary<string, ISchedulerPlugin>? schedulerPluginMap,
         TimeSpan idleWaitTime,
         int maxBatchSize,
-        TimeSpan batchTimeWindow,
-        ISchedulerExporter? schedulerExporter)
+        TimeSpan batchTimeWindow)
     {
         if (idleWaitTime < TimeSpan.Zero)
         {
@@ -305,7 +233,7 @@ public sealed class DirectSchedulerFactory : ISchedulerFactory
         }
 
         // Currently only one run-shell factory is available...
-        IJobRunShellFactory jrsf = new StdJobRunShellFactory();
+        var jrsf = new StdJobRunShellFactory();
 
         // Fire everything up
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -314,20 +242,20 @@ public sealed class DirectSchedulerFactory : ISchedulerFactory
 
         threadPool.Initialize();
 
-        QuartzSchedulerResources qrs = new QuartzSchedulerResources();
-
-        qrs.Name = schedulerName;
-        qrs.InstanceId = schedulerInstanceId;
-        qrs.JobRunShellFactory = jrsf;
-        qrs.ThreadPool = threadPool;
-        qrs.JobStore = jobStore;
-        qrs.IdleWaitTime = idleWaitTime;
-        qrs.MaxBatchSize = maxBatchSize;
-        qrs.BatchTimeWindow = batchTimeWindow;
-        qrs.SchedulerExporter = schedulerExporter;
+        QuartzSchedulerResources qrs = new()
+        {
+            Name = schedulerName,
+            InstanceId = schedulerInstanceId,
+            JobRunShellFactory = jrsf,
+            ThreadPool = threadPool,
+            JobStore = jobStore,
+            IdleWaitTime = idleWaitTime,
+            MaxBatchSize = maxBatchSize,
+            BatchTimeWindow = batchTimeWindow,
+        };
 
         // add plugins
-        if (schedulerPluginMap != null)
+        if (schedulerPluginMap is not null)
         {
             foreach (ISchedulerPlugin plugin in schedulerPluginMap.Values)
             {
@@ -337,7 +265,7 @@ public sealed class DirectSchedulerFactory : ISchedulerFactory
 
         QuartzScheduler qs = new QuartzScheduler(qrs);
 
-        ITypeLoadHelper cch = new SimpleTypeLoadHelper();
+        SimpleTypeLoadHelper cch = new SimpleTypeLoadHelper();
         cch.Initialize();
 
         jobStore.InstanceName = schedulerName;
@@ -351,7 +279,7 @@ public sealed class DirectSchedulerFactory : ISchedulerFactory
         qs.Initialize();
 
         // Initialize plugins now that we have a Scheduler instance.
-        if (schedulerPluginMap != null)
+        if (schedulerPluginMap is not null)
         {
             foreach (var pluginEntry in schedulerPluginMap)
             {
@@ -386,12 +314,10 @@ public sealed class DirectSchedulerFactory : ISchedulerFactory
     {
         if (!initialized)
         {
-            ThrowHelper.ThrowSchedulerException(
-                "you must call createRemoteScheduler or createScheduler methods before calling getScheduler()");
+            ThrowHelper.ThrowSchedulerException("you must call createRemoteScheduler or createScheduler methods before calling getScheduler()");
         }
-        SchedulerRepository schedRep = SchedulerRepository.Instance;
 
-        return schedRep.Lookup(DefaultSchedulerName, cancellationToken)!;
+        return new ValueTask<IScheduler>(SchedulerRepository.Instance.Lookup(DefaultSchedulerName)!);
     }
 
     /// <summary>
@@ -399,7 +325,6 @@ public sealed class DirectSchedulerFactory : ISchedulerFactory
     /// </summary>
     public ValueTask<IScheduler?> GetScheduler(string schedName, CancellationToken cancellationToken = default)
     {
-        SchedulerRepository schedRep = SchedulerRepository.Instance;
-        return schedRep.Lookup(schedName, cancellationToken);
+        return new ValueTask<IScheduler?>(SchedulerRepository.Instance.Lookup(schedName));
     }
 }

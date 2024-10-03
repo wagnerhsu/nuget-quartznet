@@ -23,7 +23,7 @@ but then you should only work with the Scheduler interface in your code.
 `RAMJobStore` gets its name in the obvious way: it keeps all of its data in RAM. This is why it's lightning-fast,
 and also why it's so simple to configure. The drawback is that when your application ends (or crashes) all of
 the scheduling information is lost - this means RAMJobStore cannot honor the setting of "non-volatility" on jobs and triggers.
-For some applications this is acceptable - or even the desired behavior, but for other applications, this may be disasterous.
+For some applications this is acceptable - or even the desired behavior, but for other applications, this may be disastrous.
 
 **Configuring Quartz to use RAMJobStore**
 
@@ -42,7 +42,7 @@ Because of this it is a bit more complicated to configure than `RAMJobStore`, an
 However, the performance draw-back is not terribly bad, especially if you build the database tables with indexes on the primary keys.
 
 To use AdoJobStore, you must first create a set of database tables for Quartz.NET to use.
-You can find table-creation SQL scripts in the "database/tables" directory of the Quartz.NET distribution.
+You can find table-creation SQL scripts in the "[database/tables](https://github.com/quartznet/quartznet/tree/main/database/tables)" directory of the Quartz.NET distribution.
 If there is not already a script for your database type, just look at one of the existing ones, and modify it in any way necessary for your DB.
 One thing to note is that in these scripts, all the the tables start with the prefix `QRTZ_`
 (such as the tables `QRTZ_TRIGGERS`, and `QRTZ_JOB_DETAIL`). This prefix can actually be anything you'd like, as long as you inform AdoJobStore
@@ -136,8 +136,8 @@ They are not supported by Quartz.NET project though.
 **You can and should use latest version of driver if newer is available, just create an assembly binding redirect**
 
 If your Scheduler is very busy (i.e. nearly always executing the same number of jobs as the size of the thread pool, then you should
-probably set the number of connections in the data source to be the about the size of the thread pool + 1.This is commonly configured
-int the ADO.NET connection string - see your driver implementation for details.
+probably set the number of connections in the data source to be the about the size of the thread pool + 1. This is commonly configured
+in the ADO.NET connection string - see your driver implementation for details.
 
 The `quartz.jobStore.useProperties` config parameter can be set to "true" (defaults to false) in order to instruct AdoJobStore that all values in JobDataMaps will be strings,
 and therefore can be stored as name-value pairs, rather than storing more complex objects in their serialized form in the BLOB column. This is much safer in the long term,
@@ -155,13 +155,35 @@ This is recommended configuration because it greatly decreases the possibility o
 
 ### Choosing a serializer
 
- Quartz.NET supports both binary and JSON serialization.
- JSON serialization comes from separate [Quartz.Serialization.Json](../packages/json-serialization) NuGet package.
+Quartz.NET supports both binary and JSON serialization. Using binary serialization is discouraged as it will no longer be supported in future versions.
+
+ * JSON serialization based on System.Text.Json comes from separate [Quartz.Serialization.SystemTextJson](../packages/system-text-json) NuGet package
+ * JSON serialization based on Newtonsoft.Json comes from separate [Quartz.Serialization.Json](../packages/json-serialization) NuGet package
 
  ::: tip
  JSON is recommended persistent format to store data in database for greenfield projects.
  You should also strongly consider setting useProperties to true to restrict key-values to be strings.
  :::
 
- // "json" is alias for "Quartz.Simpl.JsonObjectSerializer, Quartz.Serialization.Json"
- quartz.serializer.type = json
+#### Using code
+
+```csharp
+var config = SchedulerBuilder.Create();
+config.UsePersistentStore(store =>
+{
+    // it's generally recommended to stick with
+    // string property keys and values when serializing
+    store.UseProperties = true;
+
+    ....
+
+    store.UseSystemTextJsonSerializer();
+});
+ISchedulerFactory schedulerFactory = config.Build();
+```
+
+#### Using properties
+
+    // "stj" is an alias for "Quartz.Simpl.SystemTextJsonObjectSerializer, Quartz.Serialization.SystemTextJson"
+    // "newtonsoft" and "json" are aliases for "Quartz.Simpl.JsonObjectSerializer, Quartz.Serialization.Json"
+    quartz.serializer.type = stj

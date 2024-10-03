@@ -3,7 +3,6 @@ using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-using Quartz.Converters;
 using Quartz.HttpApiContract;
 
 namespace Quartz.AspNetCore.HttpApi.Util;
@@ -73,7 +72,7 @@ internal sealed class ExceptionHandler
 
         static string GetMessageWithInnerExceptionMessage(Exception exception)
         {
-            return exception.InnerException != null ? $"{exception.Message} {exception.InnerException.Message}" : exception.Message;
+            return exception.InnerException is not null ? $"{exception.Message} {exception.InnerException.Message}" : exception.Message;
         }
     }
 

@@ -1,4 +1,5 @@
 using System.Collections.Specialized;
+using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -7,6 +8,7 @@ using Microsoft.Extensions.Options;
 
 using Quartz.Configuration;
 using Quartz.Impl;
+using Quartz.Impl.AdoJobStore.Common;
 using Quartz.Simpl;
 using Quartz.Spi;
 using Quartz.Util;
@@ -36,12 +38,14 @@ public static class ServiceCollectionExtensions
         services.AddOptions();
 
         var schedulerBuilder = SchedulerBuilder.Create(properties);
-        if (configure != null)
+        if (configure is not null)
         {
             var target = new ServiceCollectionQuartzConfigurator(services, schedulerBuilder);
             configure(target);
         }
 
+        services.TryAddSingleton<IDbConnectionManager, DBConnectionManager>();
+        services.TryAddSingleton<ISchedulerRepository, SchedulerRepository>();
 
         // try to add services if not present with defaults, without overriding other configuration
         if (string.IsNullOrWhiteSpace(properties[StdSchedulerFactory.PropertySchedulerTypeLoadHelperType]))
@@ -49,6 +53,7 @@ public static class ServiceCollectionExtensions
             services.TryAddSingleton(typeof(ITypeLoadHelper), typeof(SimpleTypeLoadHelper));
         }
 
+        services.TryAddSingleton(TimeProvider.System);
         if (string.IsNullOrWhiteSpace(properties[StdSchedulerFactory.PropertySchedulerJobFactoryType]))
         {
             // there's no explicit job factory defined, use MS version
@@ -115,7 +120,7 @@ public static class ServiceCollectionExtensions
             ThrowHelper.ThrowArgumentException("jobType must implement the IJob interface", nameof(jobType));
         }
         var c = JobBuilder.Create();
-        if (jobKey != null)
+        if (jobKey is not null)
         {
             c.WithIdentity(jobKey);
         }
@@ -124,7 +129,7 @@ public static class ServiceCollectionExtensions
 
         options.Services.Configure<QuartzOptions>(x =>
         {
-            x.jobDetails.Add(jobDetail);
+            x._jobDetails.Add(jobDetail);
         });
 
         return options;
@@ -149,7 +154,7 @@ public static class ServiceCollectionExtensions
 
         options.Services.Configure<QuartzOptions>(x =>
         {
-            x.triggers.Add(trigger);
+            x._triggers.Add(trigger);
         });
 
         return options;
@@ -163,17 +168,14 @@ public static class ServiceCollectionExtensions
         Action<ITriggerConfigurator> trigger,
         Action<IJobConfigurator>? job = null) where T : IJob
     {
-        if (trigger is null)
-        {
-            throw new ArgumentNullException(nameof(trigger));
-        }
+        ArgumentNullException.ThrowIfNull(trigger);
 
         var jobConfigurator = JobBuilder.Create();
         var jobDetail = ConfigureAndBuildJobDetail(typeof(T), jobConfigurator, job, out var jobHasCustomKey);
 
         options.Services.Configure<QuartzOptions>(quartzOptions =>
         {
-            quartzOptions.jobDetails.Add(jobDetail);
+            quartzOptions._jobDetails.Add(jobDetail);
         });
 
         var triggerConfigurator = new TriggerConfigurator();
@@ -199,7 +201,7 @@ public static class ServiceCollectionExtensions
 
         options.Services.Configure<QuartzOptions>(quartzOptions =>
         {
-            quartzOptions.triggers.Add(t);
+            quartzOptions._triggers.Add(t);
         });
 
         return options;
@@ -240,6 +242,18 @@ public static class ServiceCollectionExtensions
         bool updateTriggers)
     {
         configurator.Services.AddSingleton(new CalendarConfiguration(name, calendar, replace, updateTriggers));
+        return configurator;
+    }
+
+    /// <summary>
+    /// Registers an <see cref="IDbProvider"/> that fetches connections from a <see cref="DbDataSource"/> within the container.
+    /// Should be used with `UseDataSourceConnectionProvider` within a ADO.NET persistence store. />
+    /// </summary>
+    /// <param name="configurator"></param>
+    /// <returns></returns>
+    public static IServiceCollectionQuartzConfigurator AddDataSourceProvider(this IServiceCollectionQuartzConfigurator configurator)
+    {
+        configurator.Services.AddSingleton<IDbProvider, DataSourceDbProvider>();
         return configurator;
     }
 }

@@ -41,7 +41,7 @@ internal sealed class DailyTimeIntervalTriggerPersistenceDelegate : SimpleProper
     public override bool CanHandleTriggerType(IOperableTrigger trigger)
     {
         var dailyTimeIntervalTrigger = trigger as DailyTimeIntervalTriggerImpl;
-        return dailyTimeIntervalTrigger != null &&
+        return dailyTimeIntervalTrigger is not null &&
                !dailyTimeIntervalTrigger.HasAdditionalProperties;
     }
 
@@ -65,11 +65,11 @@ internal sealed class DailyTimeIntervalTriggerPersistenceDelegate : SimpleProper
 
         StringBuilder timeOfDayBuffer = new StringBuilder();
         TimeOfDay startTimeOfDay = dailyTrigger.StartTimeOfDay;
-        if (startTimeOfDay != null)
+        if (startTimeOfDay is not null)
         {
-            timeOfDayBuffer.Append(startTimeOfDay.Hour).Append(",");
-            timeOfDayBuffer.Append(startTimeOfDay.Minute).Append(",");
-            timeOfDayBuffer.Append(startTimeOfDay.Second).Append(",");
+            timeOfDayBuffer.Append(startTimeOfDay.Hour).Append(',');
+            timeOfDayBuffer.Append(startTimeOfDay.Minute).Append(',');
+            timeOfDayBuffer.Append(startTimeOfDay.Second).Append(',');
         }
         else
         {
@@ -77,10 +77,10 @@ internal sealed class DailyTimeIntervalTriggerPersistenceDelegate : SimpleProper
         }
 
         TimeOfDay endTimeOfDay = dailyTrigger.EndTimeOfDay;
-        if (endTimeOfDay != null)
+        if (endTimeOfDay is not null)
         {
-            timeOfDayBuffer.Append(endTimeOfDay.Hour).Append(",");
-            timeOfDayBuffer.Append(endTimeOfDay.Minute).Append(",");
+            timeOfDayBuffer.Append(endTimeOfDay.Hour).Append(',');
+            timeOfDayBuffer.Append(endTimeOfDay.Minute).Append(',');
             timeOfDayBuffer.Append(endTimeOfDay.Second);
         }
         else
@@ -106,15 +106,15 @@ internal sealed class DailyTimeIntervalTriggerPersistenceDelegate : SimpleProper
             .WithInterval(interval, intervalUnit)
             .WithRepeatCount(repeatCount);
 
-        if (!string.IsNullOrEmpty(props.TimeZoneId) && props.TimeZoneId != null)
+        if (!string.IsNullOrEmpty(props.TimeZoneId) && props.TimeZoneId is not null)
         {
             scheduleBuilder.InTimeZone(TimeZoneUtil.FindTimeZoneById(props.TimeZoneId));
         }
 
-        if (daysOfWeekStr != null)
+        if (daysOfWeekStr is not null)
         {
             var daysOfWeek = new HashSet<DayOfWeek>();
-            string[] nums = daysOfWeekStr.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+            string[] nums = daysOfWeekStr.Split(',', StringSplitOptions.RemoveEmptyEntries);
             if (nums.Length > 0)
             {
                 foreach (string num in nums)
@@ -129,9 +129,9 @@ internal sealed class DailyTimeIntervalTriggerPersistenceDelegate : SimpleProper
             scheduleBuilder.OnDaysOfTheWeek(DailyTimeIntervalScheduleBuilder.AllDaysOfTheWeek);
         }
 
-        if (timeOfDayStr != null)
+        if (timeOfDayStr is not null)
         {
-            string[] nums = timeOfDayStr.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+            string[] nums = timeOfDayStr.Split(',', StringSplitOptions.RemoveEmptyEntries);
             TimeOfDay startTimeOfDay;
             if (nums.Length >= 3)
             {

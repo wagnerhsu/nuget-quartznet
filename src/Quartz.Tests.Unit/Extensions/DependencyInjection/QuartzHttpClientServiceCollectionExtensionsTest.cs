@@ -1,14 +1,8 @@
-#if NETFRAMEWORK
-using System.Net.Http;
-#endif
-
 using FakeItEasy;
 
 using FluentAssertions;
 
 using Microsoft.Extensions.DependencyInjection;
-
-using NUnit.Framework;
 
 using Quartz;
 using Quartz.HttpClient;
@@ -32,12 +26,12 @@ namespace Quartz.Tests.Unit.Extensions.DependencyInjection
         }
 
         [TearDown]
-        public async Task TearDown()
+        public void TearDown()
         {
             testClient?.Dispose();
             testClient = null;
 
-            await ClearSchedulerRepository();
+            ClearSchedulerRepository();
         }
 
         [Test]
@@ -122,10 +116,9 @@ namespace Quartz.Tests.Unit.Extensions.DependencyInjection
             scheduler.Should().BeNull();
         }
 
-        private static async Task ClearSchedulerRepository()
+        private static void ClearSchedulerRepository()
         {
-            var allSchedulers = await SchedulerRepository.Instance.LookupAll();
-            foreach (var scheduler in allSchedulers)
+            foreach (var scheduler in SchedulerRepository.Instance.LookupAll())
             {
                 SchedulerRepository.Instance.Remove(scheduler.SchedulerName);
             }
@@ -135,11 +128,7 @@ namespace Quartz.Tests.Unit.Extensions.DependencyInjection
 
 namespace QuartzHttpClientServiceCollectionExtensionsTestTypes
 {
-    public interface IMyScheduler : IScheduler
-    {
-    }
+    public interface IMyScheduler : IScheduler;
 
-    public interface IMySecondScheduler : IScheduler
-    {
-    }
+    public interface IMySecondScheduler : IScheduler;
 }

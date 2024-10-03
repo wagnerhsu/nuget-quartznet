@@ -5,8 +5,8 @@ namespace Quartz.Simpl;
 /// <summary>
 /// InstanceIdGenerator that will use a <see cref="SystemProperty" /> to configure the scheduler.
 /// If no value set for the property, a <see cref="SchedulerException" /> is thrown.
-/// <author>Alex Snaps</author>
 /// </summary>
+/// <author>Alex Snaps</author>
 internal sealed class SystemPropertyInstanceIdGenerator : IInstanceIdGenerator
 {
     /// <summary>
@@ -24,16 +24,16 @@ internal sealed class SystemPropertyInstanceIdGenerator : IInstanceIdGenerator
     public ValueTask<string?> GenerateInstanceId(CancellationToken cancellationToken = default)
     {
         var property = Environment.GetEnvironmentVariable(SystemPropertyName);
-        if (property == null)
+        if (property is null)
         {
             ThrowHelper.ThrowSchedulerException("No value for '" + SystemProperty + "' system property found, please configure your environment accordingly!");
         }
 
-        if (Prepend != null)
+        if (Prepend is not null)
         {
             property = Prepend + property;
         }
-        if (Postpend != null)
+        if (Postpend is not null)
         {
             property += Postpend;
         }

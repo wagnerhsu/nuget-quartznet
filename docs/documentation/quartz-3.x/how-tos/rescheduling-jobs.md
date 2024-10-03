@@ -4,7 +4,7 @@ A few ways to approach a need to reschedule a job.
 
 ## Manually Retry
 
-When a Quartz job is running, and an unhandled exception escapes the `IJob`, the Quartz system will mark the job in an error state. This would then allow you to reschedule the job using any method that would be work for your system. 
+When a Quartz job is running, and an unhandled exception escapes the `IJob`, the Quartz system will mark the job in an error state. This would then allow you to reschedule the job using any method that would be work for your system.
 
 ## Using JobExecutionException
 
@@ -42,6 +42,7 @@ public async Task Execute(IJobExecutionContext context)
     // like getting an HTTP 429 - Too Many requests
     var oldTrigger = context.Trigger;
     var newTrigger = TriggerBuilder.Create()
+        .ForJob(context.JobDetail)
         .WithIdentity($"{oldTrigger.Key.Name}-retry", oldTrigger.Key.Group)
         .StartAt(DateTimeOffset.UtcNow.AddMinutes(5))
         .Build();
@@ -52,7 +53,6 @@ public async Task Execute(IJobExecutionContext context)
 ## Self-Descheduling
 
 Another approach, is to have the job run every 5 minutes (or some other suitable cadence) and after succeeding cancel itself. This has the added benefit of being easier to logically reason about, but could still be making calls to the downstream services.
-
 
 ```csharp
 public async Task Execute(IJobExecutionContext context)

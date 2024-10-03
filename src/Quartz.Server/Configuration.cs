@@ -2,7 +2,7 @@ using System.Collections.Specialized;
 using System.Configuration;
 using Microsoft.Extensions.Logging;
 
-using Quartz.Logging;
+using Quartz.Diagnostics;
 
 namespace Quartz.Server;
 
@@ -75,12 +75,12 @@ public class Configuration
     private static string GetConfigurationOrDefault(string configurationKey, string defaultValue)
     {
         string? retValue = null;
-        if (configuration != null)
+        if (configuration is not null)
         {
             retValue = configuration[configurationKey];
         }
 
-        if (retValue == null || retValue.Trim().Length == 0)
+        if (retValue is null || retValue.Trim().Length == 0)
         {
             retValue = defaultValue;
         }

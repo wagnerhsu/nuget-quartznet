@@ -3,10 +3,8 @@ using System.Data.Common;
 
 using Microsoft.Extensions.Logging;
 
-using NUnit.Framework;
-
 using Quartz.Impl;
-using Quartz.Logging;
+using Quartz.Diagnostics;
 using Quartz.Tests.Integration.Utils;
 using Quartz.Util;
 
@@ -137,10 +135,10 @@ public class DeleteNonExistsJobTest
 
     public class TestJob : IJob
     {
-        public ValueTask Execute(IJobExecutionContext context)
+        public async ValueTask Execute(IJobExecutionContext context)
         {
             logger.LogInformation("Job is executing {Context}", context);
-            return default;
+            await Task.Yield();
         }
     }
 }

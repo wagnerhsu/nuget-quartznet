@@ -16,6 +16,7 @@ exclude:
   - name: All
     paths:
       - src/Quartz.Examples.AspNetCore/wwwroot
+      - build
 
   - name: HttpUrlsUsage
     paths:
@@ -51,3 +52,4 @@ exclude:
   - name: SuggestVarOrType_Elsewhere
   - name: SuggestVarOrType_SimpleTypes
   - name: UnusedMember.Global
+  - name: ForCanBeConvertedToForeach

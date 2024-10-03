@@ -28,7 +28,7 @@ using Quartz.Core;
 using Quartz.Impl.AdoJobStore;
 using Quartz.Impl.AdoJobStore.Common;
 using Quartz.Impl.Matchers;
-using Quartz.Logging;
+using Quartz.Diagnostics;
 using Quartz.Simpl;
 using Quartz.Spi;
 using Quartz.Util;
@@ -76,7 +76,6 @@ public class StdSchedulerFactory : ISchedulerFactory
 {
     private const string ConfigurationKeyPrefix = "quartz.";
     private const string ConfigurationKeyPrefixServer = "quartz.server";
-    public const string ConfigurationSectionName = "quartz";
     public const string PropertiesFile = "quartz.config";
     public const string PropertySchedulerInstanceName = "quartz.scheduler.instanceName";
     public const string PropertySchedulerInstanceId = "quartz.scheduler.instanceId";
@@ -99,6 +98,7 @@ public class StdSchedulerFactory : ISchedulerFactory
     public const string PropertySchedulerContextPrefix = "quartz.context.key";
     public const string PropertyThreadPoolPrefix = "quartz.threadPool";
     public const string PropertyThreadPoolType = "quartz.threadPool.type";
+    public const string PropertyTimeProviderType = "quartz.timeProvider.type";
     public const string PropertyJobStoreDbRetryInterval = "quartz.jobStore.dbRetryInterval";
     public const string PropertyJobStorePrefix = "quartz.jobStore";
     public const string PropertyJobStoreLockHandlerPrefix = PropertyJobStorePrefix + ".lockHandler";
@@ -123,8 +123,7 @@ public class StdSchedulerFactory : ISchedulerFactory
     public const string PropertyObjectSerializer = "quartz.serializer";
 
     // for validating configuration
-    private static readonly string[] supportedKeys =
-    {
+    private static readonly string[] supportedKeys = [
         PropertySchedulerInstanceName,
         PropertySchedulerInstanceId,
         PropertySchedulerInstanceIdGeneratorPrefix,
@@ -161,22 +160,25 @@ public class StdSchedulerFactory : ISchedulerFactory
         PropertyThreadExecutor,
         PropertyThreadExecutorType,
         PropertyObjectSerializer,
-    };
+        PropertyTimeProviderType,
+    ];
 
     public const string DefaultInstanceId = "NON_CLUSTERED";
     public const string AutoGenerateInstanceId = "AUTO";
     public const string SystemPropertyAsInstanceId = "SYS_PROP";
 
+    private readonly SemaphoreSlim semaphore = new(1, 1);
+
     private SchedulerException? initException;
 
     private PropertiesParser cfg = null!;
 
-    private ILogger<StdSchedulerFactory> logger = null!;
+    internal ILogger<StdSchedulerFactory> logger;
 
     private string SchedulerName
     {
         // ReSharper disable once ArrangeAccessorOwnerBody
-        get { return cfg.GetStringProperty(PropertySchedulerInstanceName, "QuartzScheduler")!; }
+        get { return cfg.GetStringProperty(PropertySchedulerInstanceName, defaultValue: "QuartzScheduler")!; }
     }
 
     /// <summary>
@@ -200,7 +202,17 @@ public class StdSchedulerFactory : ISchedulerFactory
     public virtual ValueTask<IReadOnlyList<IScheduler>> GetAllSchedulers(
         CancellationToken cancellationToken = default)
     {
-        return SchedulerRepository.Instance.LookupAll(cancellationToken);
+        return new ValueTask<IReadOnlyList<IScheduler>>(GetSchedulerRepository().LookupAll());
+    }
+
+    protected virtual ISchedulerRepository GetSchedulerRepository()
+    {
+        return SchedulerRepository.Instance;
+    }
+
+    protected virtual IDbConnectionManager GetDbConnectionManager()
+    {
+        return DBConnectionManager.Instance;
     }
 
     /// <summary>
@@ -234,11 +246,11 @@ public class StdSchedulerFactory : ISchedulerFactory
     public virtual void Initialize()
     {
         // short-circuit if already initialized
-        if (cfg != null)
+        if (cfg is not null)
         {
             return;
         }
-        if (initException != null)
+        if (initException is not null)
         {
             throw initException;
         }
@@ -250,29 +262,30 @@ public class StdSchedulerFactory : ISchedulerFactory
 
     internal static NameValueCollection? InitializeProperties(ILogger<StdSchedulerFactory> logger, bool throwOnProblem)
     {
-        var props = Util.Configuration.GetSection(ConfigurationSectionName);
-        var requestedFile = QuartzEnvironment.GetEnvironmentVariable(PropertiesFile);
-        string propFileName = (requestedFile != null && !string.IsNullOrWhiteSpace(requestedFile)) ? requestedFile : "~/quartz.config";
+        NameValueCollection? props = null;
+
+        string? requestedFile = QuartzEnvironment.GetEnvironmentVariable(PropertiesFile);
+        string propFileName = (requestedFile is not null && !string.IsNullOrWhiteSpace(requestedFile)) ? requestedFile : "~/quartz.config";
 
         // check for specials
         propFileName = FileUtil.ResolveFile(propFileName) ?? "quartz.config";
 
-        if (props == null && File.Exists(propFileName))
+        if (File.Exists(propFileName))
         {
             // file system
             try
             {
-                PropertiesParser pp = PropertiesParser.ReadFromFileResource(propFileName!);
+                PropertiesParser pp = PropertiesParser.ReadFromFileResource(propFileName);
                 props = pp.UnderlyingProperties;
-                logger.LogInformation("Quartz.NET properties loaded from configuration file {propFileName}", propFileName);
+                logger.LogInformation("Quartz.NET properties loaded from configuration file {PropFileName}", propFileName);
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Could not load properties for Quartz from file {propFileName}: {ExceptionMessage}", propFileName, ex.Message);
+                logger.LogError(ex, "Could not load properties for Quartz from file {PropFileName}: {ExceptionMessage}", propFileName, ex.Message);
             }
         }
 
-        if (props == null)
+        if (props is null)
         {
             // read from assembly
             try
@@ -283,11 +296,11 @@ public class StdSchedulerFactory : ISchedulerFactory
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Could not load default properties for Quartz from Quartz assembly: {0}".FormatInvariant(ex.Message));
+                logger.LogError(ex, "Could not load default properties for Quartz from Quartz assembly: {Message}", args: ex.Message);
             }
         }
 
-        if (props == null && throwOnProblem)
+        if (props is null && throwOnProblem)
         {
             ThrowHelper.ThrowSchedulerConfigException(
                 @"Could not find <quartz> configuration section from your application config or load default configuration from assembly.
@@ -331,6 +344,7 @@ Please add configuration to your application config file to correctly initialize
     public virtual void Initialize(NameValueCollection props)
     {
         cfg = new PropertiesParser(props);
+        Meters.Configure();
         ValidateConfiguration();
     }
 
@@ -376,17 +390,17 @@ Please add configuration to your application config file to correctly initialize
     /// <summary>  </summary>
     private async ValueTask<IScheduler> Instantiate()
     {
-        if (cfg == null)
+        if (cfg is null)
         {
             Initialize();
         }
 
-        if (initException != null)
+        if (initException is not null)
         {
             throw initException;
         }
 
-        ISchedulerExporter? exporter = null;
+        TimeProvider timeProvider = TimeProvider.System;
         IJobStore js;
         IThreadPool tp;
         QuartzScheduler? qs = null;
@@ -397,13 +411,11 @@ Please add configuration to your application config file to correctly initialize
         TimeSpan idleWaitTime = cfg!.GetTimeSpanProperty(PropertySchedulerIdleWaitTime, QuartzSchedulerResources.DefaultIdleWaitTime);
         TimeSpan dbFailureRetry = TimeSpan.FromSeconds(15);
 
-        SchedulerRepository schedRep = SchedulerRepository.Instance;
-
         // Get Scheduler Properties
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-        string schedName = cfg!.GetStringProperty(PropertySchedulerInstanceName, "QuartzScheduler")!;
-        string threadName = cfg.GetStringProperty(PropertySchedulerThreadName, "{0}_QuartzSchedulerThread".FormatInvariant(schedName))!;
+        string schedName = cfg.GetStringProperty(PropertySchedulerInstanceName, "QuartzScheduler")!;
+        string threadName = cfg.GetStringProperty(PropertySchedulerThreadName, $"{schedName}_QuartzSchedulerThread")!;
         var schedInstId = cfg.GetStringProperty(PropertySchedulerInstanceId, DefaultInstanceId)!;
 
         // Create type load helper
@@ -415,18 +427,45 @@ Please add configuration to your application config file to correctly initialize
         }
         catch (Exception e)
         {
-            ThrowHelper.ThrowSchedulerConfigException("Unable to instantiate type load helper: {0}".FormatInvariant(e.Message), e);
+            ThrowHelper.ThrowSchedulerConfigException($"Unable to instantiate type load helper: {e.Message}", e);
             return default;
         }
 
         loadHelper.Initialize();
 
-        if (schedInstId.Equals(AutoGenerateInstanceId))
+        string? timeProviderTypeString = cfg.GetStringProperty(PropertyTimeProviderType);
+        if (!string.IsNullOrWhiteSpace(timeProviderTypeString))
+        {
+            var timeProviderType = loadHelper.LoadType(timeProviderTypeString);
+            if (timeProviderType is null)
+            {
+                logger.LogError("Unable to load time provider type: {TimeProviderType}", timeProviderTypeString);
+            }
+            else
+            {
+                timeProvider = InstantiateType<TimeProvider>(timeProviderType);
+                logger.LogInformation("Using custom time provider: {TimeProviderType}", timeProviderTypeString);
+            }
+        }
+        else
+        {
+            // try to resolve from DI, if possible
+            try
+            {
+                timeProvider = InstantiateType<TimeProvider>(implementationType: null);
+            }
+            catch
+            {
+                // ignore and default to system
+            }
+        }
+
+        if (schedInstId == AutoGenerateInstanceId)
         {
             autoId = true;
             instanceIdGeneratorType = loadHelper.LoadType(cfg.GetStringProperty(PropertySchedulerInstanceIdGeneratorType)) ?? typeof(SimpleInstanceIdGenerator);
         }
-        else if (schedInstId.Equals(SystemPropertyAsInstanceId))
+        else if (schedInstId == SystemPropertyAsInstanceId)
         {
             autoId = true;
             instanceIdGeneratorType = typeof(SystemPropertyInstanceIdGenerator);
@@ -458,10 +497,6 @@ Please add configuration to your application config file to correctly initialize
             }
 
             var proxyType = loadHelper.LoadType(cfg.GetStringProperty(PropertySchedulerProxyType));
-#if REMOTING
-            proxyType ??= typeof(RemotingSchedulerProxyFactory);
-#endif
-
             IRemotableSchedulerProxyFactory factory;
             try
             {
@@ -470,20 +505,17 @@ Please add configuration to your application config file to correctly initialize
             }
             catch (Exception e)
             {
-                initException = new SchedulerException("Remotable proxy factory '{0}' could not be instantiated.".FormatInvariant(proxyType), e);
+                initException = new SchedulerException($"Remotable proxy factory '{proxyType}' could not be instantiated.", e);
                 throw initException;
             }
 
             var remoteScheduler = factory.GetProxy(schedName, schedInstId);
-
-            schedRep.Bind(remoteScheduler);
-
             return remoteScheduler;
         }
 
         Type? jobFactoryType = loadHelper.LoadType(cfg.GetStringProperty(PropertySchedulerJobFactoryType));
         IJobFactory? jobFactory = null;
-        if (jobFactoryType != null)
+        if (jobFactoryType is not null)
         {
             try
             {
@@ -491,23 +523,23 @@ Please add configuration to your application config file to correctly initialize
             }
             catch (Exception e)
             {
-                ThrowHelper.ThrowSchedulerConfigException("Unable to Instantiate JobFactory: {0}".FormatInvariant(e.Message), e);
+                ThrowHelper.ThrowSchedulerConfigException($"Unable to Instantiate JobFactory: {e.Message}", e);
             }
 
-            tProps = cfg.GetPropertyGroup(PropertySchedulerJobFactoryPrefix, true);
+            tProps = cfg.GetPropertyGroup(PropertySchedulerJobFactoryPrefix, stripPrefix: true);
             try
             {
                 ObjectUtils.SetObjectProperties(jobFactory, tProps);
             }
             catch (Exception e)
             {
-                initException = new SchedulerException("JobFactory of type '{0}' props could not be configured.".FormatInvariant(jobFactoryType), e);
+                initException = new SchedulerException($"JobFactory of type '{jobFactoryType}' props could not be configured.", e);
                 throw initException;
             }
         }
 
         IInstanceIdGenerator? instanceIdGenerator = null;
-        if (instanceIdGeneratorType != null)
+        if (instanceIdGeneratorType is not null)
         {
             try
             {
@@ -515,16 +547,16 @@ Please add configuration to your application config file to correctly initialize
             }
             catch (Exception e)
             {
-                ThrowHelper.ThrowSchedulerConfigException("Unable to Instantiate InstanceIdGenerator: {0}".FormatInvariant(e.Message), e);
+                ThrowHelper.ThrowSchedulerConfigException($"Unable to Instantiate InstanceIdGenerator: {e.Message}", e);
             }
-            tProps = cfg.GetPropertyGroup(PropertySchedulerInstanceIdGeneratorPrefix, true);
+            tProps = cfg.GetPropertyGroup(PropertySchedulerInstanceIdGeneratorPrefix, stripPrefix: true);
             try
             {
                 ObjectUtils.SetObjectProperties(instanceIdGenerator, tProps);
             }
             catch (Exception e)
             {
-                initException = new SchedulerException("InstanceIdGenerator of type '{0}' props could not be configured.".FormatInvariant(instanceIdGeneratorType), e);
+                initException = new SchedulerException($"InstanceIdGenerator of type '{instanceIdGeneratorType}' props could not be configured.", e);
                 throw initException;
             }
         }
@@ -533,7 +565,7 @@ Please add configuration to your application config file to correctly initialize
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
         var threadPoolTypeString = cfg.GetStringProperty(PropertyThreadPoolType).NullSafeTrim();
-        if (threadPoolTypeString != null
+        if (threadPoolTypeString is not null
             && threadPoolTypeString.StartsWith("Quartz.Simpl.SimpleThreadPool", StringComparison.OrdinalIgnoreCase))
         {
             // default to use as synonym for now
@@ -548,17 +580,17 @@ Please add configuration to your application config file to correctly initialize
         }
         catch (Exception e)
         {
-            initException = new SchedulerException("ThreadPool type '{0}' could not be instantiated.".FormatInvariant(tpType), e);
+            initException = new SchedulerException($"ThreadPool type '{tpType}' could not be instantiated.", e);
             throw initException;
         }
-        tProps = cfg.GetPropertyGroup(PropertyThreadPoolPrefix, true);
+        tProps = cfg.GetPropertyGroup(PropertyThreadPoolPrefix, stripPrefix: true);
         try
         {
             ObjectUtils.SetObjectProperties(tp, tProps);
         }
         catch (Exception e)
         {
-            initException = new SchedulerException("ThreadPool type '{0}' props could not be configured.".FormatInvariant(tpType), e);
+            initException = new SchedulerException($"ThreadPool type '{tpType}' props could not be configured.", e);
             throw initException;
         }
 
@@ -568,14 +600,14 @@ Please add configuration to your application config file to correctly initialize
         var dsNames = cfg.GetPropertyGroups(PropertyDataSourcePrefix);
         foreach (string dataSourceName in dsNames)
         {
-            string datasourceKey = "{0}.{1}".FormatInvariant(PropertyDataSourcePrefix, dataSourceName);
-            NameValueCollection propertyGroup = cfg.GetPropertyGroup(datasourceKey, true);
+            string datasourceKey = $"{PropertyDataSourcePrefix}.{dataSourceName}";
+            NameValueCollection propertyGroup = cfg.GetPropertyGroup(datasourceKey, stripPrefix: true);
             PropertiesParser pp = new PropertiesParser(propertyGroup);
 
-            Type? cpType = loadHelper.LoadType(pp.GetStringProperty(PropertyDbProviderType, null));
+            Type? cpType = loadHelper.LoadType(pp.GetStringProperty(PropertyDbProviderType, defaultValue: null));
 
             // custom connectionProvider...
-            if (cpType != null)
+            if (cpType is not null)
             {
                 IDbProvider cp;
                 try
@@ -584,7 +616,7 @@ Please add configuration to your application config file to correctly initialize
                 }
                 catch (Exception e)
                 {
-                    initException = new SchedulerException("ConnectionProvider of type '{0}' could not be instantiated.".FormatInvariant(cpType), e);
+                    initException = new SchedulerException($"ConnectionProvider of type '{cpType}' could not be instantiated.", e);
                     throw initException;
                 }
 
@@ -601,20 +633,20 @@ Please add configuration to your application config file to correctly initialize
                 }
                 catch (Exception e)
                 {
-                    initException = new SchedulerException("ConnectionProvider type '{0}' props could not be configured.".FormatInvariant(cpType), e);
+                    initException = new SchedulerException($"ConnectionProvider type '{cpType}' props could not be configured.", e);
                     throw initException;
                 }
 
-                dbMgr = DBConnectionManager.Instance;
+                dbMgr = GetDbConnectionManager();
                 dbMgr.AddConnectionProvider(dataSourceName, cp);
             }
             else
             {
-                var dsProvider = pp.GetStringProperty(PropertyDataSourceProvider, null);
-                var dsConnectionString = pp.GetStringProperty(PropertyDataSourceConnectionString, null);
-                var dsConnectionStringName = pp.GetStringProperty(PropertyDataSourceConnectionStringName, null);
+                var dsProvider = pp.GetStringProperty(PropertyDataSourceProvider, defaultValue: null);
+                var dsConnectionString = pp.GetStringProperty(PropertyDataSourceConnectionString, defaultValue: null);
+                var dsConnectionStringName = pp.GetStringProperty(PropertyDataSourceConnectionStringName, defaultValue: null);
 
-                if (dsConnectionString == null && !string.IsNullOrEmpty(dsConnectionStringName) && dsConnectionStringName != null)
+                if (dsConnectionString is null && !string.IsNullOrEmpty(dsConnectionStringName) && dsConnectionStringName is not null)
                 {
                     var connectionString = GetNamedConnectionString(dsConnectionStringName);
                     if (string.IsNullOrWhiteSpace(connectionString))
@@ -625,14 +657,14 @@ Please add configuration to your application config file to correctly initialize
                     dsConnectionString = connectionString;
                 }
 
-                if (dsProvider == null)
+                if (dsProvider is null)
                 {
-                    initException = new SchedulerException("Provider not specified for DataSource: {0}".FormatInvariant(dataSourceName));
+                    initException = new SchedulerException($"Provider not specified for DataSource: {dataSourceName}");
                     throw initException;
                 }
-                if (dsConnectionString == null)
+                if (dsConnectionString is null)
                 {
-                    initException = new SchedulerException("Connection string not specified for DataSource: {0}".FormatInvariant(dataSourceName));
+                    initException = new SchedulerException($"Connection string not specified for DataSource: {dataSourceName}");
                     throw initException;
                 }
                 try
@@ -640,12 +672,12 @@ Please add configuration to your application config file to correctly initialize
                     DbProvider dbp = new DbProvider(dsProvider, dsConnectionString);
                     dbp.Initialize();
 
-                    dbMgr = DBConnectionManager.Instance;
+                    dbMgr = GetDbConnectionManager();
                     dbMgr.AddConnectionProvider(dataSourceName, dbp);
                 }
                 catch (Exception exception)
                 {
-                    initException = new SchedulerException("Could not Initialize DataSource: {0}".FormatInvariant(dataSourceName), exception);
+                    initException = new SchedulerException($"Could not Initialize DataSource: {dataSourceName}", exception);
                     throw initException;
                 }
             }
@@ -661,7 +693,7 @@ Please add configuration to your application config file to correctly initialize
         }
         catch (Exception e)
         {
-            initException = new SchedulerException("JobStore of type '{0}' could not be instantiated.".FormatInvariant(jsType), e);
+            initException = new SchedulerException($"JobStore of type '{jsType}' could not be instantiated.", e);
             throw initException;
         }
 
@@ -671,19 +703,23 @@ Please add configuration to your application config file to correctly initialize
         IObjectSerializer? objectSerializer = null;
         string serializerTypeKey = "quartz.serializer.type";
         string? objectSerializerType = cfg.GetStringProperty(serializerTypeKey);
-        if (objectSerializerType != null)
+        if (objectSerializerType is not null)
         {
             // some aliases
-            if (objectSerializerType.Equals("json", StringComparison.OrdinalIgnoreCase))
+            if (objectSerializerType.Equals("newtonsoft", StringComparison.OrdinalIgnoreCase))
             {
-                objectSerializerType = "Quartz.Simpl.JsonObjectSerializer, Quartz.Serialization.Newtonsoft";
+                objectSerializerType = "Quartz.Simpl.NewtonsoftJsonObjectSerializer, Quartz.Serialization.Newtonsoft";
+            }
+            if (objectSerializerType.Equals("stj", StringComparison.OrdinalIgnoreCase))
+            {
+                objectSerializerType = typeof(SystemTextJsonObjectSerializer).AssemblyQualifiedNameWithoutVersion();
             }
             if (objectSerializerType.Equals("binary", StringComparison.OrdinalIgnoreCase))
             {
-                objectSerializerType = typeof(BinaryObjectSerializer).AssemblyQualifiedNameWithoutVersion();
+                throw new SchedulerException("Binary serialization is not supported anymore. Use JSON serialization instead. You can also manually configure custom serializer.");
             }
 
-            tProps = cfg.GetPropertyGroup(PropertyObjectSerializer, true);
+            tProps = cfg.GetPropertyGroup(PropertyObjectSerializer, stripPrefix: true);
             try
             {
                 objectSerializer = InstantiateType<IObjectSerializer>(loadHelper.LoadType(objectSerializerType));
@@ -695,7 +731,7 @@ Please add configuration to your application config file to correctly initialize
             }
             catch (Exception e)
             {
-                initException = new SchedulerException("Object serializer type '" + objectSerializerType + "' could not be instantiated.", e);
+                initException = new SchedulerException($"Object serializer type '{objectSerializerType}' could not be instantiated.", e);
                 throw initException;
             }
         }
@@ -710,7 +746,7 @@ Please add configuration to your application config file to correctly initialize
         js.InstanceName = schedName;
         js.InstanceId = schedInstId;
 
-        tProps = cfg.GetPropertyGroup(PropertyJobStorePrefix, true, new[] { PropertyJobStoreLockHandlerPrefix });
+        tProps = cfg.GetPropertyGroup(PropertyJobStorePrefix, stripPrefix: true, excludedPrefixes: [PropertyJobStoreLockHandlerPrefix]);
 
         try
         {
@@ -718,33 +754,36 @@ Please add configuration to your application config file to correctly initialize
         }
         catch (Exception e)
         {
-            initException = new SchedulerException("JobStore type '{0}' props could not be configured.".FormatInvariant(jsType), e);
+            initException = new SchedulerException($"JobStore type '{jsType}' props could not be configured.", e);
             throw initException;
         }
 
         if (js is JobStoreSupport jobStoreSupport)
         {
+            // check if we have custom DI setup
+            jobStoreSupport.ConnectionManager = GetDbConnectionManager();
+
             // Install custom lock handler (Semaphore)
             var lockHandlerType = loadHelper.LoadType(cfg.GetStringProperty(PropertyJobStoreLockHandlerType));
-            if (lockHandlerType != null)
+            if (lockHandlerType is not null)
             {
                 try
                 {
                     ISemaphore lockHandler;
-                    var cWithDbProvider = lockHandlerType.GetConstructor(new[] { typeof(DbProvider) });
+                    var cWithDbProvider = lockHandlerType.GetConstructor([typeof(DbProvider)]);
 
-                    if (cWithDbProvider != null)
+                    if (cWithDbProvider is not null)
                     {
                         // takes db provider
-                        IDbProvider dbProvider = DBConnectionManager.Instance.GetDbProvider(jobStoreSupport.DataSource);
-                        lockHandler = (ISemaphore) cWithDbProvider.Invoke(new object[] { dbProvider });
+                        IDbProvider dbProvider = GetDbConnectionManager().GetDbProvider(jobStoreSupport.DataSource);
+                        lockHandler = (ISemaphore) cWithDbProvider.Invoke([dbProvider]);
                     }
                     else
                     {
                         lockHandler = InstantiateType<ISemaphore>(lockHandlerType);
                     }
 
-                    tProps = cfg.GetPropertyGroup(PropertyJobStoreLockHandlerPrefix, true);
+                    tProps = cfg.GetPropertyGroup(PropertyJobStoreLockHandlerPrefix, stripPrefix: true);
 
                     // If this lock handler requires the table prefix, add it to its properties.
                     if (lockHandler is ITablePrefixAware)
@@ -759,7 +798,7 @@ Please add configuration to your application config file to correctly initialize
                     }
                     catch (Exception e)
                     {
-                        initException = new SchedulerException("JobStore LockHandler type '{0}' props could not be configured.".FormatInvariant(lockHandlerType), e);
+                        initException = new SchedulerException($"JobStore LockHandler type '{lockHandlerType}' props could not be configured.", e);
                         throw initException;
                     }
 
@@ -768,7 +807,7 @@ Please add configuration to your application config file to correctly initialize
                 }
                 catch (Exception e)
                 {
-                    initException = new SchedulerException("JobStore LockHandler type '{0}' could not be instantiated.".FormatInvariant(lockHandlerType), e);
+                    initException = new SchedulerException($"JobStore LockHandler type '{lockHandlerType}' could not be instantiated.", e);
                     throw initException;
                 }
             }
@@ -781,12 +820,12 @@ Please add configuration to your application config file to correctly initialize
         ISchedulerPlugin[] plugins = new ISchedulerPlugin[pluginNames.Count];
         for (int i = 0; i < pluginNames.Count; i++)
         {
-            var pp = cfg.GetPropertyGroup("{0}.{1}".FormatInvariant(PropertyPluginPrefix, pluginNames[i]), true);
+            var pp = cfg.GetPropertyGroup($"{PropertyPluginPrefix}.{pluginNames[index: i]}", stripPrefix: true);
             var plugInType = pp[PropertyPluginType];
 
-            if (plugInType == null)
+            if (plugInType is null)
             {
-                initException = new SchedulerException("SchedulerPlugin type not specified for plugin '{0}'".FormatInvariant(pluginNames[i]));
+                initException = new SchedulerException($"SchedulerPlugin type not specified for plugin '{pluginNames[index: i]}'");
                 throw initException;
             }
             ISchedulerPlugin plugin;
@@ -795,11 +834,11 @@ Please add configuration to your application config file to correctly initialize
                 var pluginTypeType = loadHelper.LoadType(plugInType) ?? throw new SchedulerException($"Could not load plugin type {plugInType}");
                 // we need to use concrete types to resolve correct one
                 var method = GetType().GetMethod(nameof(InstantiateType), BindingFlags.Instance | BindingFlags.NonPublic)!.MakeGenericMethod(pluginTypeType);
-                plugin = (ISchedulerPlugin) method.Invoke(this, new [] { pluginTypeType! })!;
+                plugin = (ISchedulerPlugin) method.Invoke(this, [pluginTypeType])!;
             }
             catch (Exception e)
             {
-                initException = new SchedulerException("SchedulerPlugin of type '{0}' could not be instantiated.".FormatInvariant(plugInType), e);
+                initException = new SchedulerException($"SchedulerPlugin of type '{plugInType}' could not be instantiated.", e);
                 throw initException;
             }
             try
@@ -808,7 +847,7 @@ Please add configuration to your application config file to correctly initialize
             }
             catch (Exception e)
             {
-                initException = new SchedulerException("JobStore SchedulerPlugin '{0}' props could not be configured.".FormatInvariant(plugInType), e);
+                initException = new SchedulerException($"JobStore SchedulerPlugin '{plugInType}' props could not be configured.", e);
                 throw initException;
             }
 
@@ -821,12 +860,12 @@ Please add configuration to your application config file to correctly initialize
         IJobListener[] jobListeners = new IJobListener[jobListenerNames.Count];
         for (int i = 0; i < jobListenerNames.Count; i++)
         {
-            var lp = cfg.GetPropertyGroup("{0}.{1}".FormatInvariant(PropertyJobListenerPrefix, jobListenerNames[i]), true);
+            var lp = cfg.GetPropertyGroup(prefix: $"{PropertyJobListenerPrefix}.{jobListenerNames[index: i]}", stripPrefix: true);
             var listenerType = lp[PropertyListenerType];
 
-            if (listenerType == null)
+            if (listenerType is null)
             {
-                initException = new SchedulerException("JobListener type not specified for listener '{0}'".FormatInvariant(jobListenerNames[i]));
+                initException = new SchedulerException($"JobListener type not specified for listener '{jobListenerNames[index: i]}'");
                 throw initException;
             }
             IJobListener listener;
@@ -836,21 +875,21 @@ Please add configuration to your application config file to correctly initialize
             }
             catch (Exception e)
             {
-                initException = new SchedulerException("JobListener of type '{0}' could not be instantiated.".FormatInvariant(listenerType), e);
+                initException = new SchedulerException($"JobListener of type '{listenerType}' could not be instantiated.", e);
                 throw initException;
             }
             try
             {
                 var nameProperty = listener.GetType().GetProperty("Name", BindingFlags.Public | BindingFlags.Instance);
-                if (nameProperty != null && nameProperty.CanWrite)
+                if (nameProperty is not null && nameProperty.CanWrite)
                 {
-                    nameProperty.GetSetMethod()!.Invoke(listener, new object[] { jobListenerNames[i] });
+                    nameProperty.GetSetMethod()!.Invoke(listener, [jobListenerNames[index: i]]);
                 }
                 ObjectUtils.SetObjectProperties(listener, lp);
             }
             catch (Exception e)
             {
-                initException = new SchedulerException("JobListener '{0}' props could not be configured.".FormatInvariant(listenerType), e);
+                initException = new SchedulerException($"JobListener '{listenerType}' props could not be configured.", e);
                 throw initException;
             }
             jobListeners[i] = listener;
@@ -863,12 +902,12 @@ Please add configuration to your application config file to correctly initialize
         ITriggerListener[] triggerListeners = new ITriggerListener[triggerListenerNames.Count];
         for (int i = 0; i < triggerListenerNames.Count; i++)
         {
-            var lp = cfg.GetPropertyGroup("{0}.{1}".FormatInvariant(PropertyTriggerListenerPrefix, triggerListenerNames[i]), true);
+            var lp = cfg.GetPropertyGroup(prefix: $"{PropertyTriggerListenerPrefix}.{triggerListenerNames[index: i]}", stripPrefix: true);
             var listenerType = lp[PropertyListenerType];
 
-            if (listenerType == null)
+            if (listenerType is null)
             {
-                initException = new SchedulerException("TriggerListener type not specified for listener '{0}'".FormatInvariant(triggerListenerNames[i]));
+                initException = new SchedulerException($"TriggerListener type not specified for listener '{triggerListenerNames[index: i]}'");
                 throw initException;
             }
             ITriggerListener listener;
@@ -878,62 +917,24 @@ Please add configuration to your application config file to correctly initialize
             }
             catch (Exception e)
             {
-                initException = new SchedulerException("TriggerListener of type '{0}' could not be instantiated.".FormatInvariant(listenerType), e);
+                initException = new SchedulerException($"TriggerListener of type '{listenerType}' could not be instantiated.", e);
                 throw initException;
             }
             try
             {
                 var nameProperty = listener.GetType().GetProperty("Name", BindingFlags.Public | BindingFlags.Instance);
-                if (nameProperty != null && nameProperty.CanWrite)
+                if (nameProperty is not null && nameProperty.CanWrite)
                 {
-                    nameProperty.GetSetMethod()!.Invoke(listener, new object[] { triggerListenerNames[i] });
+                    nameProperty.GetSetMethod()!.Invoke(listener, [triggerListenerNames[index: i]]);
                 }
                 ObjectUtils.SetObjectProperties(listener, lp);
             }
             catch (Exception e)
             {
-                initException = new SchedulerException("TriggerListener '{0}' props could not be configured.".FormatInvariant(listenerType), e);
+                initException = new SchedulerException($"TriggerListener '{listenerType}' props could not be configured.", e);
                 throw initException;
             }
             triggerListeners[i] = listener;
-        }
-
-        // Get exporter
-        // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-        var exporterType = cfg.GetStringProperty(PropertySchedulerExporterType, null);
-
-#if !REMOTING
-            if (exporterType != null && exporterType.StartsWith("Quartz.Simpl.RemotingSchedulerExporter"))
-            {
-                logger.LogWarning("RemotingSchedulerExporter configuration was ignored as Remoting is not supported");
-                exporterType = null;
-            }
-#endif
-
-        if (exporterType != null)
-        {
-            try
-            {
-                exporter = InstantiateType<ISchedulerExporter>(loadHelper.LoadType(exporterType));
-            }
-            catch (Exception e)
-            {
-                initException = new SchedulerException("Scheduler exporter of type '{0}' could not be instantiated.".FormatInvariant(exporterType), e);
-                throw initException;
-            }
-
-            tProps = cfg.GetPropertyGroup(PropertySchedulerExporterPrefix, true);
-
-            try
-            {
-                ObjectUtils.SetObjectProperties(exporter, tProps);
-            }
-            catch (Exception e)
-            {
-                initException = new SchedulerException("Scheduler exporter type '{0}' props could not be configured.".FormatInvariant(exporterType), e);
-                throw initException;
-            }
         }
 
         bool tpInited = false;
@@ -944,7 +945,7 @@ Please add configuration to your application config file to correctly initialize
 
         try
         {
-            IJobRunShellFactory jrsf = new StdJobRunShellFactory();
+            var jrsf = new StdJobRunShellFactory();
 
             if (autoId)
             {
@@ -981,7 +982,8 @@ Please add configuration to your application config file to correctly initialize
             rsrcs.MaxBatchSize = maxBatchSize;
             rsrcs.InterruptJobsOnShutdown = interruptJobsOnShutdown;
             rsrcs.InterruptJobsOnShutdownWithWait = interruptJobsOnShutdownWithWait;
-            rsrcs.SchedulerExporter = exporter;
+            rsrcs.TimeProvider = timeProvider;
+            rsrcs.SchedulerRepository = GetSchedulerRepository();
 
             tp.InstanceName = schedName;
             tp.InstanceId = schedInstId;
@@ -1006,7 +1008,7 @@ Please add configuration to your application config file to correctly initialize
             IScheduler sched = Instantiate(rsrcs, qs);
 
             // set job factory if specified
-            if (jobFactory != null)
+            if (jobFactory is not null)
             {
                 qs.JobFactory = jobFactory;
             }
@@ -1039,6 +1041,7 @@ Please add configuration to your application config file to correctly initialize
             js.InstanceId = schedInstId;
             js.InstanceName = schedName;
             js.ThreadPoolSize = tp.PoolSize;
+            js.TimeProvider = timeProvider;
             await js.Initialize(loadHelper, qs.SchedulerSignaler).ConfigureAwait(false);
 
             jrsf.Initialize(sched);
@@ -1048,22 +1051,13 @@ Please add configuration to your application config file to correctly initialize
             logger.LogInformation("Using thread pool '{ThreadPoolType}', size: {ThreadPoolSize}", qs.ThreadPoolClass.FullName, qs.ThreadPoolSize);
             logger.LogInformation("Using job store '{JobStoreType}', supports persistence: {SupportsPersistence}, clustered: {Clustered}", qs.JobStoreClass.FullName, qs.SupportsPersistence, qs.Clustered);
 
-            // prevents the repository from being garbage collected
-            qs.AddNoGCObject(schedRep);
             // prevents the db manager from being garbage collected
-            if (dbMgr != null)
+            if (dbMgr is not null)
             {
                 qs.AddNoGCObject(dbMgr);
             }
 
-            schedRep.Bind(sched);
-
             return sched;
-        }
-        catch (SchedulerException)
-        {
-            await ShutdownFromInstantiateException(tp, qs, tpInited, qsInited).ConfigureAwait(false);
-            throw;
         }
         catch
         {
@@ -1074,12 +1068,7 @@ Please add configuration to your application config file to correctly initialize
 
     protected virtual string? GetNamedConnectionString(string dsConnectionStringName)
     {
-#if NETFRAMEWORK
-        var connectionStringSettings = System.Configuration.ConfigurationManager.ConnectionStrings[dsConnectionStringName];
-        return connectionStringSettings.ConnectionString;
-#else
-            return null;
-#endif
+        return null;
     }
 
     protected virtual T InstantiateType<T>(Type? implementationType)
@@ -1093,11 +1082,11 @@ Please add configuration to your application config file to correctly initialize
         {
             if (qsInited)
             {
-                await qs!.Shutdown(false).ConfigureAwait(false);
+                await qs!.Shutdown(waitForJobsToComplete: false).ConfigureAwait(false);
             }
             else if (tpInited)
             {
-                tp!.Shutdown(false);
+                tp!.Shutdown(waitForJobsToComplete: false);
             }
         }
         catch (Exception e)
@@ -1124,7 +1113,7 @@ Please add configuration to your application config file to correctly initialize
             return null;
         }
 
-        return Type.GetType(typeName, true);
+        return Type.GetType(typeName, throwOnError: true);
     }
 
     /// <summary>
@@ -1137,30 +1126,43 @@ Please add configuration to your application config file to correctly initialize
     /// </remarks>
     public virtual async ValueTask<IScheduler> GetScheduler(CancellationToken cancellationToken = default)
     {
-        if (cfg == null)
+        // We always need to guarantee exclusivity because of the possible sequence of interactions with
+        // the SchedulerRepository.
+        if (!await semaphore.WaitAsync(0, cancellationToken).ConfigureAwait(false))
         {
-            Initialize();
+            await semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
         }
 
-        SchedulerRepository schedRep = SchedulerRepository.Instance;
-
-        IScheduler? sched = await schedRep.Lookup(SchedulerName, cancellationToken).ConfigureAwait(false);
-
-        if (sched != null)
+        try
         {
-            if (sched.IsShutdown)
+            if (cfg is null)
             {
-                schedRep.Remove(SchedulerName);
+                Initialize();
             }
-            else
+
+            ISchedulerRepository schedulerRepository = GetSchedulerRepository();
+            IScheduler? sched = schedulerRepository.Lookup(SchedulerName);
+
+            if (sched is not null)
             {
-                return sched;
+                if (sched.IsShutdown)
+                {
+                    schedulerRepository.Remove(SchedulerName);
+                }
+                else
+                {
+                    return sched;
+                }
             }
+
+            sched = await Instantiate().ConfigureAwait(false);
+            schedulerRepository.Bind(sched);
+            return sched;
         }
-
-        sched = await Instantiate().ConfigureAwait(false);
-
-        return sched!;
+        finally
+        {
+            semaphore.Release();
+        }
     }
 
     /// <summary> <para>
@@ -1168,9 +1170,8 @@ Please add configuration to your application config file to correctly initialize
     /// it has already been instantiated).
     /// </para>
     /// </summary>
-    public virtual ValueTask<IScheduler?> GetScheduler(string schedName,
-        CancellationToken cancellationToken = default)
+    public virtual ValueTask<IScheduler?> GetScheduler(string schedName, CancellationToken cancellationToken = default)
     {
-        return SchedulerRepository.Instance.Lookup(schedName, cancellationToken);
+        return new ValueTask<IScheduler?>(GetSchedulerRepository().Lookup(schedName));
     }
 }

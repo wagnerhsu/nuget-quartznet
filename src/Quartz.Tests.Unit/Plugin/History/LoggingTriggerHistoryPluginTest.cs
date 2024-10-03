@@ -19,8 +19,6 @@
 
 #endregion
 
-using NUnit.Framework;
-
 using Quartz.Impl;
 using Quartz.Job;
 using Quartz.Plugin.History;
@@ -54,7 +52,7 @@ public class LoggingTriggerHistoryPluginTest
 
         await plugin.TriggerFired(t, ctx);
 
-        Assert.That(plugin.InfoMessages.Count, Is.EqualTo(1));
+        Assert.That(plugin.InfoMessages, Has.Count.EqualTo(1));
     }
 
     [Test]
@@ -68,7 +66,7 @@ public class LoggingTriggerHistoryPluginTest
 
         await plugin.TriggerMisfired(t);
 
-        Assert.That(plugin.InfoMessages.Count, Is.EqualTo(1));
+        Assert.That(plugin.InfoMessages, Has.Count.EqualTo(1));
     }
 
     [Test]
@@ -85,7 +83,7 @@ public class LoggingTriggerHistoryPluginTest
 
         await plugin.TriggerComplete(t, ctx, SchedulerInstruction.ReExecuteJob);
 
-        Assert.That(plugin.InfoMessages.Count, Is.EqualTo(1));
+        Assert.That(plugin.InfoMessages, Has.Count.EqualTo(1));
     }
 
     private class RecordingLoggingTriggerHistoryPlugin : LoggingTriggerHistoryPlugin

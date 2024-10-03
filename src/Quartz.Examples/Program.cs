@@ -21,7 +21,6 @@
 
 using System.Reflection;
 
-using Quartz.Util;
 using Spectre.Console;
 
 namespace Quartz.Examples;
@@ -57,7 +56,7 @@ public class Program
             Assembly asm = typeof(Program).Assembly;
             Type[] types = asm.GetTypes();
 
-            IDictionary<int, Type> typeMap = new Dictionary<int, Type>();
+            Dictionary<int, Type> typeMap = new();
             int counter = 1;
 
             Console.WriteLine("Select example to run: ");
@@ -76,7 +75,7 @@ public class Program
             foreach (Type t in typeList)
             {
                 string counterString = $"[{counter}]".PadRight(4);
-                Console.WriteLine("{0} {1} {2}", counterString, t.Namespace!.Substring(t.Namespace.LastIndexOf(".") + 1), t.Name);
+                Console.WriteLine("{0} {1} {2}", counterString, t.Namespace!.Substring(t.Namespace.LastIndexOf('.') + 1), t.Name);
                 typeMap.Add(counter++, t);
             }
 
@@ -84,7 +83,7 @@ public class Program
             Console.Write("> ");
             int num = Convert.ToInt32(Console.ReadLine());
             Type eType = typeMap[num];
-            IExample example = ObjectUtils.InstantiateType<IExample>(eType);
+            IExample example = (IExample) eType.GetConstructor(Type.EmptyTypes)!.Invoke([]);
             await example.Run().ConfigureAwait(false);
             Console.WriteLine("Example run successfully.");
         }
@@ -96,7 +95,7 @@ public class Program
         Console.Read();
     }
 
-    private class TypeNameComparer : IComparer<Type>
+    private sealed class TypeNameComparer : IComparer<Type>
     {
         public int Compare(Type? t1, Type? t2)
         {

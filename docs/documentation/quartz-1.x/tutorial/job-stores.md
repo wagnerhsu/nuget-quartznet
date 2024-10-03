@@ -18,7 +18,7 @@ RAMJobStore is the simplest JobStore to use, it is also the most performant (in 
 RAMJobStore gets its name in the obvious way: it keeps all of its data in RAM. This is why it's lightning-fast,
 and also why it's so simple to configure. The drawback is that when your application ends (or crashes) all of
 the scheduling information is lost - this means RAMJobStore cannot honor the setting of "non-volatility" on jobs and triggers.
-For some applications this is acceptable - or even the desired behavior, but for other applications, this may be disasterous.
+For some applications this is acceptable - or even the desired behavior, but for other applications, this may be disastrous.
 
 To use RAMJobStore (and assuming you're using StdSchedulerFactory) you don't need to do anything special. Default configuration
 of Quartz.NET uses RAMJobStore as job store implementation.
@@ -81,7 +81,7 @@ In this case, we're specifying that Quartz should use the data source name "myDS
 
 One last thing that is needed for the configuration is to set data source connection string information and database provider. Connection
 string is the standard ADO.NET connection which is driver specific. Database provider is an abstraction of database drivers to create
-loose coupling betweeb database drivers and Quartz.
+loose coupling between database drivers and Quartz.
 
 **Setting Data Source's Connection String And Database Provider**
 
@@ -103,8 +103,8 @@ Currently following database providers are supported:
 * Firebird-210 - Firebird ADO.NET 2.0 Provider v. 2.1.0 (.NET 2.0)
 
 If your Scheduler is very busy (i.e. nearly always executing the same number of jobs as the size of the thread pool, then you should
-probably set the number of connections in the data source to be the about the size of the thread pool + 1.This is commonly configured
-int the ADO.NET connection string - see your driver implementation for details.
+probably set the number of connections in the data source to be the about the size of the thread pool + 1. This is commonly configured
+in the ADO.NET connection string - see your driver implementation for details.
 
 The "quartz.jobStore.useProperties" config parameter can be set to "true" (defaults to false) in order to instruct AdoJobStore that all values in JobDataMaps will be strings,
 and therefore can be stored as name-value pairs, rather than storing more complex objects in their serialized form in the BLOB column. This is much safer in the long term,

@@ -6,7 +6,7 @@ title: 'Simple Triggers'
 # Simple Triggers
 
 SimpleTrigger should meet your scheduling needs if you need to have a job execute exactly once at a specific moment in time,
-or at a specific moment in time followed by repeats at a specific interval. Or plainer english, if you want the trigger to
+or at a specific moment in time followed by repeats at a specific interval. Or plainer English, if you want the trigger to
 fire at exactly 11:23:54 AM on January 13, 2005, and then fire five more times, every ten seconds.
 
 With this description, you may not find it surprising to find that the properties of a SimpleTrigger include: a start-time,
@@ -99,7 +99,7 @@ so that you can be familiar with options available to you that may not have been
 ## SimpleTrigger Misfire Instructions
 
 SimpleTrigger has several instructions that can be used to inform Quartz.NET what it should do when a misfire occurs.
-(Misfire situations were introduced in the More About Triggers section of this tutorial).
+(Misfire situations were introduced in the [More About Triggers](/documentation/quartz-4.x/tutorial/more-about-triggers.html) section of this tutorial).
 These instructions are defined as constants on `MisfirePolicy.SimpleTrigger` (including API documentation describing their behavior).
 The instructions include:
 

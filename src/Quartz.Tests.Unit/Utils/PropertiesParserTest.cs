@@ -19,8 +19,6 @@
 
 using System.Collections.Specialized;
 
-using NUnit.Framework;
-
 using Quartz.Util;
 
 namespace Quartz.Tests.Unit.Utils;
@@ -44,6 +42,6 @@ public class PropertiesParserTest
 
         PropertiesParser propertiesParser = new PropertiesParser(props);
         NameValueCollection propGroup = propertiesParser.GetPropertyGroup("x.y", true);
-        Assert.AreEqual("", propGroup.Get("z"));
+        Assert.That(propGroup.Get("z"), Is.EqualTo(""));
     }
 }

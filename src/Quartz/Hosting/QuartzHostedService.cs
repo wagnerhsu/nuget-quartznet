@@ -1,22 +1,17 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
-#if NET6_OR_GREATER
 using Lifetime = Microsoft.Extensions.Hosting.IHostApplicationLifetime;
-#else
-using Lifetime = Microsoft.Extensions.Hosting.IApplicationLifetime;
-#endif
 
 namespace Quartz;
 
-public sealed class QuartzHostedService : IHostedService
+public class QuartzHostedService : IHostedLifecycleService
 {
     private readonly Lifetime applicationLifetime;
     private readonly ISchedulerFactory schedulerFactory;
     private readonly IOptions<QuartzHostedServiceOptions> options;
     private IScheduler? scheduler;
     internal Task? startupTask;
-    private bool schedulerWasStarted;
 
     public QuartzHostedService(
         Lifetime applicationLifetime,
@@ -28,7 +23,12 @@ public sealed class QuartzHostedService : IHostedService
         this.options = options;
     }
 
-    public async Task StartAsync(CancellationToken cancellationToken)
+    public virtual Task StartingAsync(CancellationToken cancellationToken)
+    {
+        return Task.CompletedTask;
+    }
+
+    public virtual async Task StartAsync(CancellationToken cancellationToken)
     {
         // Require successful initialization for application startup to succeed
         scheduler = await schedulerFactory.GetScheduler(cancellationToken).ConfigureAwait(false);
@@ -53,12 +53,17 @@ public sealed class QuartzHostedService : IHostedService
         }
     }
 
+    public virtual Task StartedAsync(CancellationToken cancellationToken)
+    {
+        return Task.CompletedTask;
+    }
+
     private async Task AwaitStartupCompletionAndStartSchedulerAsync(CancellationToken startupCancellationToken)
     {
         using var combinedCancellationSource = CancellationTokenSource.CreateLinkedTokenSource(startupCancellationToken, applicationLifetime.ApplicationStarted);
 
         await Task.Delay(Timeout.InfiniteTimeSpan, combinedCancellationSource.Token) // Wait "indefinitely", until startup completes or is aborted
-            .ContinueWith(_ => { }, TaskContinuationOptions.OnlyOnCanceled) // Without an OperationCanceledException on cancellation
+            .ContinueWith(_ => { }, CancellationToken.None, TaskContinuationOptions.OnlyOnCanceled, TaskScheduler.Default) // Without an OperationCanceledException on cancellation
             .ConfigureAwait(false);
 
         if (!startupCancellationToken.IsCancellationRequested)
@@ -77,8 +82,6 @@ public sealed class QuartzHostedService : IHostedService
             throw new InvalidOperationException("The scheduler should have been initialized first.");
         }
 
-        schedulerWasStarted = true;
-
         // Avoid potential race conditions between ourselves and StopAsync, in case it has already made its attempt to stop the scheduler
         if (applicationLifetime.ApplicationStopping.IsCancellationRequested)
         {
@@ -95,7 +98,12 @@ public sealed class QuartzHostedService : IHostedService
         }
     }
 
-    public async Task StopAsync(CancellationToken cancellationToken)
+    public virtual Task StoppingAsync(CancellationToken cancellationToken)
+    {
+        return Task.CompletedTask;
+    }
+
+    public virtual async Task StopAsync(CancellationToken cancellationToken)
     {
         // Stopped without having been started
         if (scheduler is null || startupTask is null)
@@ -110,10 +118,13 @@ public sealed class QuartzHostedService : IHostedService
         }
         finally
         {
-            if (schedulerWasStarted && !cancellationToken.IsCancellationRequested)
-            {
-                await scheduler.Shutdown(options.Value.WaitForJobsToComplete, cancellationToken).ConfigureAwait(false);
-            }
+            // we always need to call shutdown to ensure that we unbind the scheduler from global repository
+            await scheduler.Shutdown(options.Value.WaitForJobsToComplete, cancellationToken).ConfigureAwait(false);
         }
+    }
+
+    public virtual Task StoppedAsync(CancellationToken cancellationToken)
+    {
+        return Task.CompletedTask;
     }
 }

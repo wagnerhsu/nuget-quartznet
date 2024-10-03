@@ -30,8 +30,9 @@ export const sidebarEn: SidebarConfig = [
       "/documentation/best-practices",
       {
         text: "API Documentation",
-        link: "http://quartznet.sourceforge.net/apidoc/3.0/html",
+        link: "https://docs.quartz-scheduler.net/apidoc/3.0",
       },
+      "/documentation/quartz-3.x/db/index",
       "/documentation/quartz-3.x/migration-guide",
       "/documentation/quartz-3.x/miscellaneous-features",
     ],
@@ -53,6 +54,7 @@ export const sidebarEn: SidebarConfig = [
         text: "Quartz Core Additions",
         children: [
           "/documentation/quartz-3.x/packages/quartz-jobs",
+          "/documentation/quartz-3.x/packages/system-text-json",
           "/documentation/quartz-3.x/packages/json-serialization",
           "/documentation/quartz-3.x/packages/quartz-plugins",
         ],
@@ -102,7 +104,7 @@ export const sidebarEn: SidebarConfig = [
           "/documentation/quartz-4.x/configuration/reference",
           "/documentation/quartz-4.x/migration-guide",
           {
-            link: "http://quartznet.sourceforge.net/apidoc/2.0/html",
+            link: "https://docs.quartz-scheduler.net/apidoc/4.0",
             text: "API Documentation",
           },
           {
@@ -174,7 +176,7 @@ export const sidebarEn: SidebarConfig = [
           "/documentation/quartz-2.x/configuration/",
           "/documentation/quartz-2.x/migration-guide",
           {
-            link: "http://quartznet.sourceforge.net/apidoc/2.0/html",
+            link: "https://docs.quartz-scheduler.net/apidoc/2.0/html",
             text: "API Documentation",
           },
         ],
@@ -202,7 +204,7 @@ export const sidebarEn: SidebarConfig = [
             ],
           },
           {
-            link: "http://quartznet.sourceforge.net/apidoc/1.0/html",
+            link: "https://docs.quartz-scheduler.net/apidoc/1.0/html",
             text: "API Documentation",
           },
         ],

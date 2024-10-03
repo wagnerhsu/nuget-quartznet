@@ -1,5 +1,3 @@
-using NUnit.Framework;
-
 using Quartz.Plugin.TimeZoneConverter;
 using Quartz.Util;
 
@@ -19,7 +17,7 @@ public class TimeZoneConverterTest
         }
         finally
         {
-            TimeZoneUtil.CustomResolver = id => null;
+            TimeZoneUtil.CustomResolver = _ => null;
         }
     }
 }

@@ -42,7 +42,7 @@ public sealed class JobType
     /// <exception cref="ArgumentNullException"><paramref name="type"/> is <see langword="null" /></exception>
     public JobType(Type type)
     {
-        if (type == null)
+        if (type is null)
         {
             ThrowHelper.ThrowArgumentNullException(nameof(type));
         }
@@ -63,9 +63,9 @@ public sealed class JobType
 
     public Type Type => type.Value;
 
-    private string GetFullName(Type jobType)
+    private static string GetFullName(Type jobType)
     {
-        if (jobType.AssemblyQualifiedName == null)
+        if (jobType.AssemblyQualifiedName is null)
         {
             ThrowHelper.ThrowArgumentException("Cannot determine job type name when type's AssemblyQualifiedName is null", nameof(jobType));
         }
@@ -85,6 +85,11 @@ public sealed class JobType
     public override bool Equals(object? obj)
     {
         return ReferenceEquals(this, obj) || obj is JobType other && Equals(other);
+    }
+
+    public override string ToString()
+    {
+        return FullName;
     }
 
     public override int GetHashCode()

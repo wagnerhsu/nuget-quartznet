@@ -38,8 +38,7 @@ public partial class StdAdoDelegate
     }
 
     /// <inheritdoc />
-    public virtual async ValueTask<IReadOnlyCollection<TriggerKey>> SelectTriggerNamesForJob(
-        ConnectionAndTransactionHolder conn,
+    public virtual async ValueTask<List<TriggerKey>> SelectTriggerNamesForJob(ConnectionAndTransactionHolder conn,
         JobKey jobKey,
         CancellationToken cancellationToken = default)
     {
@@ -48,12 +47,12 @@ public partial class StdAdoDelegate
         AddCommandParameter(cmd, "jobName", jobKey.Name);
         AddCommandParameter(cmd, "jobGroup", jobKey.Group);
         using var rs = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-        List<TriggerKey> list = new List<TriggerKey>(10);
+        List<TriggerKey> list = [];
         while (await rs.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
             string trigName = rs.GetString(ColumnTriggerName)!;
             string trigGroup = rs.GetString(ColumnTriggerGroup)!;
-            list.Add(new TriggerKey(trigName, trigGroup));
+            list.Add(new(trigName, trigGroup));
         }
 
         return list;
@@ -140,9 +139,9 @@ public partial class StdAdoDelegate
 
             var map = await ReadMapFromReader(rs, 6).ConfigureAwait(false);
 
-            if (map != null)
+            if (map is not null)
             {
-                jobBuilder.SetJobData(new JobDataMap(map));
+                jobBuilder.SetJobData(new(map));
             }
 
             jobBuilder.DisallowConcurrentExecution(GetBooleanFromDbValue(rs[ColumnIsNonConcurrent]))
@@ -171,14 +170,12 @@ public partial class StdAdoDelegate
     }
 
     /// <inheritdoc />
-    public virtual async ValueTask<IReadOnlyCollection<string>> SelectJobGroups(
-        ConnectionAndTransactionHolder conn,
-        CancellationToken cancellationToken = default)
+    public virtual async ValueTask<List<string>> SelectJobGroups(ConnectionAndTransactionHolder conn, CancellationToken cancellationToken = default)
     {
         using var cmd = PrepareCommand(conn, ReplaceTablePrefix(SqlSelectJobGroups));
         AddCommandParameter(cmd, "schedulerName", schedName);
         using var rs = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-        List<string> list = new List<string>();
+        List<string> list = [];
         while (await rs.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
             list.Add(rs.GetString(0));
@@ -295,7 +292,7 @@ public partial class StdAdoDelegate
                 return GetObjectFromBlob<T>(rs, colIndex);
             }
 
-            return new ValueTask<T?>((T?) null);
+            return new((T?) null);
         }
 
         return GetObjectFromBlob<T>(rs, colIndex);

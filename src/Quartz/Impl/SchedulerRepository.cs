@@ -1,4 +1,5 @@
 #region License
+
 /*
  * All content copyright Marko Lahma, unless otherwise indicated. All rights reserved.
  *
@@ -15,87 +16,62 @@
  * under the License.
  *
  */
+
 #endregion
+
+using System.Collections.Concurrent;
+
+using Quartz.Spi;
 
 namespace Quartz.Impl;
 
 /// <summary>
-/// Holds references to Scheduler instances - ensuring uniqueness, and
-/// preventing garbage collection, and allowing 'global' lookups.
+/// Holds references to Scheduler instances - ensuring uniqueness, and preventing garbage collection, and allowing 'global' lookups.
 /// </summary>
-/// <author>James House</author>
 /// <author>Marko Lahma (.NET)</author>
-public sealed class SchedulerRepository
+public sealed class SchedulerRepository : ISchedulerRepository
 {
-    private readonly Dictionary<string, IScheduler> schedulers;
-    private readonly object syncRoot = new object();
+    private readonly ConcurrentDictionary<string, IScheduler> schedulers = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Gets the singleton instance.
     /// </summary>
     /// <value>The instance.</value>
-    public static SchedulerRepository Instance { get; } = new SchedulerRepository();
-
-    private SchedulerRepository()
-    {
-        schedulers = new Dictionary<string, IScheduler>(StringComparer.OrdinalIgnoreCase);
-    }
+    public static SchedulerRepository Instance { get; } = new();
 
     /// <summary>
     /// Binds the specified sched.
     /// </summary>
-    /// <param name="sched">The sched.</param>
-    public void Bind(IScheduler sched)
+    /// <param name="scheduler">The sched.</param>
+    public void Bind(IScheduler scheduler)
     {
-        lock (syncRoot)
+        if (!schedulers.TryAdd(scheduler.SchedulerName, scheduler))
         {
-            if (schedulers.ContainsKey(sched.SchedulerName))
-            {
-                ThrowHelper.ThrowSchedulerException($"Scheduler with name '{sched.SchedulerName}' already exists.");
-            }
-
-            schedulers[sched.SchedulerName] = sched;
+            ThrowHelper.ThrowSchedulerException($"Scheduler with name '{scheduler.SchedulerName}' already exists.");
         }
     }
 
     /// <summary>
     /// Removes the specified sched name.
     /// </summary>
-    /// <param name="schedName">Name of the sched.</param>
+    /// <param name="schedulerName">Name of the sched.</param>
     /// <returns></returns>
-    public bool Remove(string schedName)
+    public void Remove(string schedulerName)
     {
-        lock (syncRoot)
-        {
-            return schedulers.Remove(schedName);
-        }
+        schedulers.Remove(schedulerName, out _);
     }
 
-    /// <summary>
-    /// Lookups the specified sched name.
-    /// </summary>
-    public ValueTask<IScheduler?> Lookup(
-        string schedName,
-        CancellationToken cancellationToken = default)
+    public IScheduler? Lookup(string schedulerName)
     {
-        lock (syncRoot)
-        {
-            schedulers.TryGetValue(schedName, out var retValue);
-            return new ValueTask<IScheduler?>(retValue);
-        }
+        return schedulers.GetValueOrDefault(schedulerName);
     }
 
     /// <summary>
     /// Lookups all.
     /// </summary>
     /// <returns></returns>
-    public ValueTask<IReadOnlyList<IScheduler>> LookupAll(
-        CancellationToken cancellationToken = default)
+    public List<IScheduler> LookupAll()
     {
-        lock (syncRoot)
-        {
-            IReadOnlyList<IScheduler> result = new List<IScheduler>(schedulers.Values);
-            return new ValueTask<IReadOnlyList<IScheduler>>(result);
-        }
+        return [..schedulers.Values];
     }
 }

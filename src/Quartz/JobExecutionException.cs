@@ -17,7 +17,6 @@
  */
 #endregion
 
-using System.Globalization;
 using System.Runtime.Serialization;
 
 namespace Quartz;
@@ -103,10 +102,10 @@ public sealed class JobExecutionException : SchedulerException
     /// <summary>
     /// Initializes a new instance of the <see cref="JobExecutionException"/> class.
     /// </summary>
-    /// <param name="info">The <see cref="T:SerializationInfo"></see> that holds the serialized object data about the exception being thrown.</param>
-    /// <param name="context">The <see cref="T:System.Runtime.Serialization.StreamingContext"></see> that contains contextual information about the source or destination.</param>
-    /// <exception cref="T:System.Runtime.Serialization.SerializationException">The class name is null or <see cref="P:System.Exception.HResult"></see> is zero (0). </exception>
-    /// <exception cref="T:System.ArgumentNullException">The info parameter is null. </exception>
+    /// <param name="info">The <see cref="SerializationInfo"></see> that holds the serialized object data about the exception being thrown.</param>
+    /// <param name="context">The <see cref="System.Runtime.Serialization.StreamingContext"></see> that contains contextual information about the source or destination.</param>
+    /// <exception cref="System.Runtime.Serialization.SerializationException">The class name is null or <see cref="System.Exception.HResult"></see> is zero (0). </exception>
+    /// <exception cref="System.ArgumentNullException">The info parameter is null. </exception>
     private JobExecutionException(SerializationInfo info, StreamingContext context) : base(info, context)
     {
     }
@@ -142,10 +141,5 @@ public sealed class JobExecutionException : SchedulerException
     /// </returns>
     /// <PermissionSet><IPermission class="System.Security.Permissions.FileIOPermission, mscorlib, Version=2.0.3600.0, Culture=neutral, PublicKeyToken=b77a5c561934e089" version="1" PathDiscovery="*AllFiles*"/></PermissionSet>
     public override string ToString()
-    {
-        return
-            string.Format(CultureInfo.InvariantCulture,
-                "Parameters: refire = {0}, unscheduleFiringTrigger = {1}, unscheduleAllTriggers = {2} \n {3}",
-                RefireImmediately, UnscheduleFiringTrigger, UnscheduleAllTriggers, base.ToString());
-    }
+        => $"Parameters: refire = {RefireImmediately}, unscheduleFiringTrigger = {UnscheduleFiringTrigger}, unscheduleAllTriggers = {UnscheduleAllTriggers} {Environment.NewLine} {base.ToString()}";
 }
