@@ -1,25 +1,25 @@
-using System.Threading;
-using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 
 using Quartz.Listener;
-using Quartz.Logging;
+using Quartz.Diagnostics;
 
-namespace Quartz.Core
+namespace Quartz.Core;
+
+/// <summary>
+/// ErrorLogger - Scheduler Listener Class
+/// </summary>
+internal sealed class ErrorLogger : SchedulerListenerSupport
 {
-    /// <summary>
-    /// ErrorLogger - Scheduler Listener Class
-    /// </summary>
-    internal class ErrorLogger : SchedulerListenerSupport
-    {
-        private readonly ILog log = LogProvider.GetLogger(typeof(ErrorLogger));
+    private readonly ILogger<ErrorLogger> logger = LogProvider.CreateLogger<ErrorLogger>();
 
-        public override Task SchedulerError(
-            string msg,
-            SchedulerException cause,
-            CancellationToken cancellationToken = default)
-        {
-            log.ErrorException(msg, cause);
-            return Task.CompletedTask;
-        }
+    public override ValueTask SchedulerError(
+        string msg,
+        SchedulerException cause,
+        CancellationToken cancellationToken = default)
+    {
+#pragma warning disable CA2254
+        logger.LogError(cause, msg);
+#pragma warning restore CA2254
+        return default;
     }
 }

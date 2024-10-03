@@ -1,5 +1,5 @@
 ---
-title:  JobStores
-redirect: documentation/quartz-2.x/tutorial/index.html
-layout: redirect
+title: JobStores
+redirectTo: documentation/quartz-2.x/tutorial/index.html
+
 ---

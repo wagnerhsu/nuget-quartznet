@@ -19,166 +19,150 @@
 
 #endregion
 
-using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Collections.Specialized;
-using System.Data;
 using System.Data.Common;
-using System.Linq;
 using System.Reflection;
 using System.Text;
 
-using Quartz.Logging;
+using Quartz.Diagnostics;
 using Quartz.Util;
 
-namespace Quartz.Impl.AdoJobStore.Common
+namespace Quartz.Impl.AdoJobStore.Common;
+
+/// <summary>
+/// Concrete implementation of <see cref="IDbProvider" />.
+/// </summary>
+/// <author>Marko Lahma</author>
+public class DbProvider : IDbProvider
 {
+    protected const string PropertyDbProvider = StdSchedulerFactory.PropertyDbProvider;
+    protected const string DbProviderResourceName = "Quartz.Impl.AdoJobStore.Common.dbproviders.netstandard.properties";
+
+    private readonly MethodInfo? commandBindByNamePropertySetter;
+    private readonly ConstructorInfo connectionConstructor;
+    private readonly ConstructorInfo commandConstructor;
+
+    private static readonly List<DbMetadataFactory> dbMetadataFactories;
+    // needs to allow concurrent threads to read and update, since field is static
+    private static readonly ConcurrentDictionary<string, DbMetadata> dbMetadataLookup = new();
+
     /// <summary>
-    /// Concrete implementation of <see cref="IDbProvider" />.
+    /// Parse metadata once.
     /// </summary>
-    /// <author>Marko Lahma</author>
-    public class DbProvider : IDbProvider
+    static DbProvider()
     {
-		protected const string PropertyDbProvider = StdSchedulerFactory.PropertyDbProvider;
-        protected const string DbProviderSectionName = StdSchedulerFactory.ConfigurationSectionName;
-        protected const string DbProviderResourceName =
-#if NETSTANDARD
-            "Quartz.Impl.AdoJobStore.Common.dbproviders.netstandard.properties";
-#else
-            "Quartz.Impl.AdoJobStore.Common.dbproviders.properties";
-#endif
-
-        private readonly MethodInfo? commandBindByNamePropertySetter;
-
-        private static readonly List<DbMetadataFactory> dbMetadataFactories;
-        // needs to allow concurrent threads to read and update, since field is static
-        private static readonly ConcurrentDictionary<string, DbMetadata> dbMetadataLookup = new ConcurrentDictionary<string, DbMetadata>();
-
-        /// <summary>
-        /// Parse metadata once.
-        /// </summary>
-        static DbProvider()
+        var properties = StdSchedulerFactory.InitializeProperties(LogProvider.CreateLogger<StdSchedulerFactory>(), throwOnProblem: false);
+        dbMetadataFactories = new List<DbMetadataFactory>
         {
-            var properties = StdSchedulerFactory.InitializeProperties(LogProvider.NoOpLogger.Instance, throwOnProblem: false);
-            dbMetadataFactories = new List<DbMetadataFactory>
-            {
-                new ConfigurationBasedDbMetadataFactory(properties ?? new NameValueCollection(), PropertyDbProvider),
-                new EmbeddedAssemblyResourceDbMetadataFactory(DbProviderResourceName, PropertyDbProvider)
-            };
+            new ConfigurationBasedDbMetadataFactory(properties ?? new NameValueCollection(), PropertyDbProvider),
+            new EmbeddedAssemblyResourceDbMetadataFactory(DbProviderResourceName, PropertyDbProvider)
+        };
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="DbProvider"/> class.
+    /// </summary>
+    /// <param name="dbProviderName">Name of the db provider.</param>
+    /// <param name="connectionString">The connection string.</param>
+    public DbProvider(string dbProviderName, string connectionString)
+    {
+        ConnectionString = connectionString;
+        Metadata = GetDbMetadata(dbProviderName);
+
+        if (Metadata is null)
+        {
+            ThrowHelper.ThrowArgumentException($"Invalid DB provider name: {dbProviderName}{Environment.NewLine}{GenerateValidProviderNamesInfo()}");
         }
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="DbProvider"/> class.
-        /// </summary>
-        /// <param name="dbProviderName">Name of the db provider.</param>
-        /// <param name="connectionString">The connection string.</param>
-        public DbProvider(string dbProviderName, string connectionString)
+        // check if command supports direct setting of BindByName property, needed for Oracle Managed ODP diver at least
+        var property = Metadata.CommandType?.GetProperty("BindByName", BindingFlags.Instance | BindingFlags.Public);
+        if (property is not null && property.PropertyType == typeof(bool) && property.CanWrite)
         {
-            ConnectionString = connectionString;
-            Metadata = GetDbMetadata(dbProviderName);
-
-            if (Metadata == null)
-            {
-                throw new ArgumentException($"Invalid DB provider name: {dbProviderName}{Environment.NewLine}{GenerateValidProviderNamesInfo()}");
-            }
-
-            // check if command supports direct setting of BindByName property, needed for Oracle Managed ODP diver at least
-            var property = Metadata.CommandType?.GetProperty("BindByName", BindingFlags.Instance | BindingFlags.Public);
-            if (property != null && property.PropertyType == typeof (bool) && property.CanWrite)
-            {
-                commandBindByNamePropertySetter = property.GetSetMethod()!;
-            }
+            commandBindByNamePropertySetter = property.GetSetMethod()!;
         }
 
-        public void Initialize()
-        {
-            // do nothing, initialized in static constructor
-        }
+        connectionConstructor = ObjectUtils.GetDefaultConstructor(Metadata.ConnectionType);
+        commandConstructor = ObjectUtils.GetDefaultConstructor((Metadata.CommandType));
+    }
 
-        ///<summary>
-        /// Registers DB metadata information for given provider name.
-        ///</summary>
-        ///<param name="dbProviderName"></param>
-        ///<param name="metadata"></param>
-        public static void RegisterDbMetadata(string dbProviderName, DbMetadata metadata)
-        {
-            dbMetadataLookup[dbProviderName] = metadata;
-        }
+    public void Initialize()
+    {
+        // do nothing, initialized in static constructor
+    }
 
-        private static DbMetadata GetDbMetadata(string providerName)
+    ///<summary>
+    /// Registers DB metadata information for given provider name.
+    ///</summary>
+    ///<param name="dbProviderName"></param>
+    ///<param name="metadata"></param>
+    public static void RegisterDbMetadata(string dbProviderName, DbMetadata metadata)
+    {
+        dbMetadataLookup[dbProviderName] = metadata;
+    }
+
+    private static DbMetadata GetDbMetadata(string providerName)
+    {
+        if (!dbMetadataLookup.TryGetValue(providerName, out var result))
         {
-            if (!dbMetadataLookup.TryGetValue(providerName, out var result))
+            foreach (DbMetadataFactory? dbMetadataFactory in dbMetadataFactories)
             {
-                foreach (var dbMetadataFactory in dbMetadataFactories)
+                if (dbMetadataFactory.GetProviderNames().Contains(providerName))
                 {
-                    if (dbMetadataFactory.GetProviderNames().Contains(providerName))
-                    {
-                        result = dbMetadataFactory.GetDbMetadata(providerName);
-                        RegisterDbMetadata(providerName, result);
-                        return result;
-                    }
+                    result = dbMetadataFactory.GetDbMetadata(providerName);
+                    RegisterDbMetadata(providerName, result);
+                    return result;
                 }
-                throw new ArgumentOutOfRangeException(nameof(providerName), "There is no metadata information for provider '" + providerName + "'");
             }
-
-            return result;
+            ThrowHelper.ThrowArgumentOutOfRangeException(nameof(providerName), $"There is no metadata information for provider '{providerName}'");
         }
 
-        /// <summary>
-        /// Generates the valid provider names information.
-        /// </summary>
-        /// <returns></returns>
-        protected static string GenerateValidProviderNamesInfo()
+        return result;
+    }
+
+    /// <summary>
+    /// Generates the valid provider names information.
+    /// </summary>
+    /// <returns></returns>
+    protected static string GenerateValidProviderNamesInfo()
+    {
+        var providerNames = dbMetadataFactories
+            .SelectMany(factory => factory.GetProviderNames())
+            .Distinct()
+            .OrderBy(name => name);
+
+        StringBuilder sb = new StringBuilder("Valid DB Provider names are:").Append(Environment.NewLine);
+        foreach (string providerName in providerNames)
         {
-            var providerNames = dbMetadataFactories
-                .SelectMany(factory => factory.GetProviderNames())
-                .Distinct()
-                .OrderBy(name => name);
-
-            StringBuilder sb = new StringBuilder("Valid DB Provider names are:").Append(Environment.NewLine);
-            foreach (string providerName in providerNames)
-            {
-                sb.Append("\t").Append(providerName).Append(Environment.NewLine);
-            }
-            return sb.ToString();
+            sb.Append('\t').Append(providerName).Append(Environment.NewLine);
         }
+        return sb.ToString();
+    }
 
-        /// <inheritdoc />
-        public virtual DbCommand CreateCommand()
-        {
-            var command = ObjectUtils.InstantiateType<DbCommand>(Metadata.CommandType);
-            commandBindByNamePropertySetter?.Invoke(command, new object[] { Metadata.BindByName });
-            return command;
-        }
+    /// <inheritdoc />
+    public virtual DbCommand CreateCommand()
+    {
+        DbCommand command = (DbCommand) commandConstructor.Invoke([]);
+        commandBindByNamePropertySetter?.Invoke(command, [Metadata.BindByName]);
+        return command;
+    }
 
-        /// <inheritdoc />
-        public virtual DbConnection CreateConnection()
-        {
-            var conn = ObjectUtils.InstantiateType<DbConnection>(Metadata.ConnectionType);
-            conn.ConnectionString = ConnectionString;
-            return conn;
-        }
+    /// <inheritdoc />
+    public virtual DbConnection CreateConnection()
+    {
+        DbConnection conn = (DbConnection) connectionConstructor.Invoke([]);
+        conn.ConnectionString = ConnectionString;
+        return conn;
+    }
 
-        /// <summary>
-        /// Returns a new parameter object for binding values to parameter
-        /// placeholders in SQL statements or Stored Procedure variables.
-        /// </summary>
-        /// <returns>A new <see cref="IDbDataParameter"/></returns>
-        public virtual DbParameter CreateParameter()
-        {
-            return ObjectUtils.InstantiateType<DbParameter>(Metadata.ParameterType);
-        }
+    /// <inheritdoc />
+    public string ConnectionString { get; set; }
 
-        /// <inheritdoc />
-        public string ConnectionString { get; set; }
+    /// <inheritdoc />
+    public DbMetadata Metadata { get; }
 
-        /// <inheritdoc />
-        public DbMetadata Metadata { get; }
-
-        /// <inheritdoc />
-        public virtual void Shutdown()
-        {
-        }
+    /// <inheritdoc />
+    public virtual void Shutdown()
+    {
     }
 }

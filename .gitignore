@@ -39,9 +39,6 @@ _dotCover*/
 *.resharper
 [Tt]est[Rr]esult*
 
-#Project files
-[Bb]uild/
-
 #Subversion files
 .svn
 
@@ -51,6 +48,7 @@ _dotCover*/
 # Other
 /src/Quartz/Quartz.xml
 /src/Quartz.Serialization.Json/Quartz.Serialization.Json.xml
+.nuke/
 
 *.ReSharper
 *.dotCover
@@ -86,9 +84,13 @@ node_modules
 /tools/psake
 /tools/NUnit*
 /artifacts
+/temp
 /src/Quartz.Examples.AspNetCore/healthchecksdb
 
 docs/.vuepress/dist
+docs/.vuepress/.temp
+
 /node_modules
 BenchmarkDotNet.Artifacts
 .idea/
+*.received.*

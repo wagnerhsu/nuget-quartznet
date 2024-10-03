@@ -1,31 +1,46 @@
+---
+
+title : Serialization (Newtonsoft Json.NET)
+---
+
 ::: tip
 JSON is recommended persistent format to store data in database for greenfield projects.
 You should also strongly consider setting useProperties to true to restrict key-values to be strings.
 :::
 
-[Quartz.Serialization.Json](https://www.nuget.org/packages/Quartz.Serialization.Json) provides JSON serialization support for job stores using 
+::: tip
+You might want to consider using [Quartz.Serialization.SystemTextJson](https://www.nuget.org/packages/Quartz.Serialization.SystemTextJson)
+and its System.Text.Json support for JSON serialization.
+:::
+
+[Quartz.Serialization.Json](https://www.nuget.org/packages/Quartz.Serialization.Json) provides JSON serialization support for job stores using
 [Json.NET](https://www.newtonsoft.com/json) to handle the actual serialization process.
 
 ## Installation
 
 You need to add NuGet package reference to your project which uses Quartz.
 
-    Install-Package Quartz.Serialization.Json
+```shell
+Install-Package Quartz.Serialization.Json
+```
 
 ## Configuring
 
 **Classic property-based configuration**
+
 ```csharp
 var properties = new NameValueCollection
 {
 	["quartz.jobStore.type"] = "Quartz.Impl.AdoJobStore.JobStoreTX, Quartz",
-	// "json" is alias for "Quartz.Simpl.JsonObjectSerializer, Quartz.Serialization.Json" 
-	["quartz.serializer.type"] = "json"
+	// "newtonsoft" and "json" are aliases for "Quartz.Simpl.JsonObjectSerializer, Quartz.Serialization.Json"
+	// you should prefer "newtonsoft" as it's more explicit from Quartz 3.10 onwards
+	["quartz.serializer.type"] = "newtonsoft"
 };
 ISchedulerFactory schedulerFactory = new StdSchedulerFactory(properties);
 ```
 
 **Configuring using scheduler builder**
+
 ```csharp
 var config = SchedulerBuilder.Create();
 config.UsePersistentStore(store =>
@@ -37,10 +52,11 @@ config.UsePersistentStore(store =>
         db.ConnectionString = "my connection string"
     );
 
-    store.UseJsonSerializer();
+    store.UseNewtonsoftJsonSerializer();
 });
 ISchedulerFactory schedulerFactory = config.Build();
-``` 
+```
+
 ## Migrating from binary serialization
 
 There's now official solution for migration as there can be quirks in every setup, but there's a recipe that can work for you.
@@ -51,17 +67,24 @@ There's now official solution for migration as there can be quirks in every setu
 **Example hybrid serializer**
 
 ```csharp
-public class MigratorSerializer : IObjectSerializer
+using Newtonsoft.Json;
+
+using Quartz.Simpl;
+using Quartz.Spi;
+
+namespace Quartz;
+
+public sealed class MigratorSerializer : IObjectSerializer
 {
-    private BinaryObjectSerializer binarySerializer;
-    private JsonObjectSerializer jsonSerializer;
+    private readonly BinaryObjectSerializer binarySerializer;
+    private readonly JsonObjectSerializer jsonSerializer;
 
     public MigratorSerializer()
     {
-        this.binarySerializer = new BinaryObjectSerializer();
+        binarySerializer = new BinaryObjectSerializer();
         // you might need custom configuration, see sections about customizing
         // in documentation
-        this.jsonSerializer = new JsonObjectSerializer();
+        jsonSerializer = new JsonObjectSerializer();
     }
 
     public T DeSerialize<T>(byte[] data) where T : class
@@ -69,34 +92,39 @@ public class MigratorSerializer : IObjectSerializer
         try
         {
             // Attempt to deserialize data as JSON
-            var result = this.jsonSerializer.DeSerialize<T>(data);
-            return result;
+            return jsonSerializer.DeSerialize<T>(data)!;
         }
         catch (JsonReaderException)
         {
             // Presumably, the data was not JSON, we instead use the binary serializer
-            return this.binarySerializer.DeSerialize<T>(data);
+            var binaryData = binarySerializer.DeSerialize<T>(data);
+            if (binaryData is JobDataMap jobDataMap)
+            {
+                // make sure we mark the map as dirty so it will be serialized as JSON next time
+                jobDataMap[SchedulerConstants.ForceJobDataMapDirty] = "true";
+            }
+            return binaryData!;
         }
     }
 
     public void Initialize()
     {
-        this.binarySerializer.Initialize();
-        this.jsonSerializer.Initialize();
+        binarySerializer.Initialize();
+        jsonSerializer.Initialize();
     }
 
     public byte[] Serialize<T>(T obj) where T : class
     {
-        return this.jsonSerializer.Serialize<T>(obj);
+        return jsonSerializer.Serialize(obj);
     }
 }
 ```
 
 ## Customizing JSON.NET
- 
+
  If you need to customize JSON.NET settings, you need to inherit custom implementation and override `CreateSerializerSettings`.
- 
- ```csharp
+
+```csharp
 class CustomJsonSerializer : JsonObjectSerializer
 {
     protected override JsonSerializerSettings CreateSerializerSettings()
@@ -105,13 +133,14 @@ class CustomJsonSerializer : JsonObjectSerializer
         settings.Converters.Add(new MyCustomConverter());
         return settings;
     }
-} 
+}
 ```
 
 **And then configure it to use**
+
 ```csharp
 store.UseSerializer<CustomJsonSerializer>();
-// or 
+// or
 "quartz.serializer.type" = "MyProject.CustomJsonSerializer, MyProject"
 ```
 
@@ -121,6 +150,7 @@ If you have implemented a custom calendar, you need to implement a `ICalendarSer
 There's a convenience base class `CalendarSerializer` that you can use the get strongly-typed experience.
 
 **Custom calendar and serializer**
+
 ```csharp
 [Serializable]
 class CustomCalendar : BaseCalendar
@@ -167,6 +197,7 @@ class CustomCalendarSerializer : CalendarSerializer<CustomCalendar>
 ```
 
 **Configuring custom calendar serializer**
+
 ```csharp
 var config = SchedulerBuilder.Create();
 config.UsePersistentStore(store =>

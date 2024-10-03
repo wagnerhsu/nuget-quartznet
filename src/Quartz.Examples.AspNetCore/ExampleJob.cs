@@ -1,28 +1,42 @@
-using System;
-using System.Threading.Tasks;
+using System.Text.Json.Nodes;
 
-using Microsoft.Extensions.Logging;
+namespace Quartz.Examples.AspNetCore;
 
-namespace Quartz.Examples.AspNetCore
+public class ExampleJob : IJob, IDisposable
 {
-    public class ExampleJob : IJob, IDisposable
+    private readonly ILogger<ExampleJob> logger;
+    private readonly IHttpClientFactory httpClientFactory;
+
+    public ExampleJob(
+        ILogger<ExampleJob> logger,
+        IHttpClientFactory httpClientFactory)
     {
-        private readonly ILogger<ExampleJob> logger;
+        this.logger = logger;
+        this.httpClientFactory = httpClientFactory;
+    }
 
-        public ExampleJob(ILogger<ExampleJob> logger)
-        {
-            this.logger = logger;
-        }
+    public string? InjectedString { get; set; }
+    public bool InjectedBool { get; set; }
 
-        public async Task Execute(IJobExecutionContext context)
-        {
-            logger.LogInformation(context.JobDetail.Key + " job executing, triggered by " + context.Trigger.Key);
-            await Task.Delay(TimeSpan.FromSeconds(1));
-        }
+    public async ValueTask Execute(IJobExecutionContext context)
+    {
+        logger.LogInformation(
+            "Job {Job} executing, triggered by {Trigger}. InjectedString: {InjectedString}, InjectedBool: {InjectedBool}",
+            context.JobDetail.Key,
+            context.Trigger.Key,
+            InjectedString,
+            InjectedBool);
 
-        public void Dispose()
-        {
-            logger.LogInformation("Example job disposing");
-        }
+        using var httpClient = httpClientFactory.CreateClient("example");
+        var result = await httpClient.GetFromJsonAsync<JsonObject>("http://localhost:5000/healthz");
+        logger.LogInformation("Got health check result {Result}", result);
+
+        await Task.Delay(TimeSpan.FromSeconds(1));
+    }
+
+    public void Dispose()
+    {
+        GC.SuppressFinalize(this);
+        logger.LogInformation("Example job disposing");
     }
 }

@@ -1,9 +1,10 @@
 ---
+
 title: 'Lesson 5: SimpleTrigger'
 ---
 
 SimpleTrigger should meet your scheduling needs if you need to have a job execute exactly once at a specific moment in time,
-or at a specific moment in time followed by repeats at a specific interval. Or plainer english, if you want the trigger to
+or at a specific moment in time followed by repeats at a specific interval. Or plainer English, if you want the trigger to
 fire at exactly 11:23:54 AM on January 13, 2005, and then fire five more times, every ten seconds.
 
 With this description, you may not find it surprising to find that the properties of a SimpleTrigger include: a start-time,
@@ -26,7 +27,7 @@ fire before the end-time arrives).
 
 SimpleTrigger instances are built using **TriggerBuilder** (for the trigger's main properties) and **WithSimpleSchedule** extension method (for the SimpleTrigger-specific properties).
 
-__Build a trigger for a specific moment in time, with no repeats:__
+**Build a trigger for a specific moment in time, with no repeats:**
 
 ```csharp
 // trigger builder creates simple trigger by default, actually an ITrigger is returned
@@ -37,7 +38,7 @@ ISimpleTrigger trigger = (ISimpleTrigger) TriggerBuilder.Create()
     .Build();
 ```
 
-__Build a trigger for a specific moment in time, then repeating every ten seconds ten times:__
+**Build a trigger for a specific moment in time, then repeating every ten seconds ten times:**
 
 ```csharp
 trigger = TriggerBuilder.Create()
@@ -51,7 +52,7 @@ trigger = TriggerBuilder.Create()
 
 ```
 
-__Build a trigger that will fire once, five minutes in the future:__
+**Build a trigger that will fire once, five minutes in the future:**
 
 ```csharp
 trigger = (ISimpleTrigger) TriggerBuilder.Create()
@@ -61,7 +62,7 @@ trigger = (ISimpleTrigger) TriggerBuilder.Create()
     .Build();
 ```
 
-__Build a trigger that will fire now, then repeat every five minutes, until the hour 22:00:__
+**Build a trigger that will fire now, then repeat every five minutes, until the hour 22:00:**
 
 ```csharp
 trigger = TriggerBuilder.Create()
@@ -72,7 +73,8 @@ trigger = TriggerBuilder.Create()
     .EndAt(DateBuilder.DateOf(22, 0, 0))
     .Build();
 ```
-__Build a trigger that will fire at the top of the next hour, then repeat every 2 hours, forever:__
+
+**Build a trigger that will fire at the top of the next hour, then repeat every 2 hours, forever:**
 
 ```csharp
 trigger = TriggerBuilder.Create()
@@ -97,7 +99,7 @@ SimpleTrigger has several instructions that can be used to inform Quartz.NET wha
 These instructions are defined as constants on MisfirePolicy.SimpleTrigger (including API documentation describing their behavior).
 The instructions include:
 
-__Misfire Instruction Constants for SimpleTrigger__
+**Misfire Instruction Constants for SimpleTrigger**
 
 * MisfireInstruction.IgnoreMisfirePolicy
 * MisfirePolicy.SimpleTrigger.FireNow

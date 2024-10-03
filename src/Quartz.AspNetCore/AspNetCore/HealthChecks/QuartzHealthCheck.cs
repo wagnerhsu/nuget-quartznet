@@ -1,54 +1,34 @@
-#if SUPPORTS_HEALTH_CHECKS
-using System.Threading;
-using System.Threading.Tasks;
-
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
-using Quartz.Listener;
+namespace Quartz.AspNetCore.HealthChecks;
 
-namespace Quartz.AspNetCore.HealthChecks
+internal sealed class QuartzHealthCheck : IHealthCheck
 {
-    internal class QuartzHealthCheck : SchedulerListenerSupport, IHealthCheck
+    private readonly ISchedulerFactory schedulerFactory;
+
+    public QuartzHealthCheck(ISchedulerFactory schedulerFactory)
     {
-        private bool running;
-        private int errorCount;
+        this.schedulerFactory = schedulerFactory ?? throw new ArgumentNullException(nameof(schedulerFactory));
+    }
 
-        Task<HealthCheckResult> IHealthCheck.CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken)
+    async Task<HealthCheckResult> IHealthCheck.CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken)
+    {
+        var scheduler = await schedulerFactory.GetScheduler(cancellationToken).ConfigureAwait(false);
+        if (!scheduler.IsStarted)
         {
-            HealthCheckResult result;
-            if (!running)
-            {
-                result = HealthCheckResult.Unhealthy($"Quartz scheduler is not running");
-            }
-            else if (errorCount > 0)
-            {
-                result = HealthCheckResult.Unhealthy($"Quartz scheduler has experienced {errorCount} errors");
-            }
-            else
-            {
-                result = HealthCheckResult.Healthy("Quartz scheduler is ready");
-            }
-
-            return Task.FromResult(result);
-        }
-        
-        public override Task SchedulerError(string msg, SchedulerException cause, CancellationToken cancellationToken = default)
-        {
-            errorCount++;
-            return Task.CompletedTask;
+            return HealthCheckResult.Unhealthy("Quartz scheduler is not running");
         }
 
-        public override Task SchedulerStarted(CancellationToken cancellationToken = default)
+        try
         {
-            running = true;
-            return Task.CompletedTask;
+            // Ask for a job we know doesn't exist
+            await scheduler.CheckExists(new JobKey(Guid.NewGuid().ToString()), cancellationToken).ConfigureAwait(false);
+        }
+        catch (SchedulerException)
+        {
+            return HealthCheckResult.Unhealthy("Quartz scheduler cannot connect to the store");
         }
 
-        public override Task SchedulerShutdown(CancellationToken cancellationToken = default)
-        {
-            running = false;
-            return Task.CompletedTask;
-        }
+        return HealthCheckResult.Healthy("Quartz scheduler is ready");
     }
 }
-#endif

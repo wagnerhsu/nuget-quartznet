@@ -17,110 +17,103 @@
  */
 #endregion
 
-using System;
-using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Data.Common;
 
+using Microsoft.Extensions.Logging;
+
 using Quartz.Impl.AdoJobStore.Common;
-using Quartz.Logging;
+using Quartz.Diagnostics;
 
-namespace Quartz.Util
+namespace Quartz.Util;
+
+/// <summary>
+/// Manages a collection of IDbProviders, and provides transparent access
+/// to their database.
+/// </summary>
+/// <seealso cref="IDbProvider" />
+/// <author>James House</author>
+/// <author>Sharada Jambula</author>
+/// <author>Mohammad Rezaei</author>
+/// <author>Marko Lahma (.NET)</author>
+public sealed class DBConnectionManager : IDbConnectionManager
 {
-	/// <summary>
-	/// Manages a collection of IDbProviders, and provides transparent access
-	/// to their database.
-	/// </summary>
-	/// <seealso cref="IDbProvider" />
-	/// <author>James House</author>
-	/// <author>Sharada Jambula</author>
-	/// <author>Mohammad Rezaei</author>
-    /// <author>Marko Lahma (.NET)</author>
-    public class DBConnectionManager : IDbConnectionManager
+    private static readonly DBConnectionManager instance = new();
+    private readonly ILogger<DBConnectionManager> logger;
+
+    private readonly ConcurrentDictionary<string, IDbProvider> providers = new();
+
+    /// <summary>
+    /// Get the class instance.
+    /// </summary>
+    /// <returns> an instance of this class
+    /// </returns>
+    public static IDbConnectionManager Instance => instance;
+
+    private DBConnectionManager()
     {
-        private static readonly DBConnectionManager instance = new DBConnectionManager();
-	    private static readonly ILog log = LogProvider.GetLogger(typeof (DBConnectionManager));
+        logger = LogProvider.CreateLogger<DBConnectionManager>();
+    }
 
-        private readonly object syncRoot = new object();
-        private readonly Dictionary<string, IDbProvider> providers = new Dictionary<string, IDbProvider>();
+    public DBConnectionManager(ILogger<DBConnectionManager> loggger)
+    {
+        this.logger = loggger;
+    }
 
-        /// <summary>
-		/// Get the class instance.
-		/// </summary>
-		/// <returns> an instance of this class
-		/// </returns>
-		public static IDbConnectionManager Instance => instance;
+    /// <summary>
+    /// Adds the connection provider.
+    /// </summary>
+    /// <param name="dataSourceName">Name of the data source.</param>
+    /// <param name="provider">The provider.</param>
+    public void AddConnectionProvider(string dataSourceName, IDbProvider provider)
+    {
+        logger.LogInformation("Registering datasource '{DataSource}' with db provider: '{Provider}'", dataSourceName, provider);
 
-        /// <summary>
-		/// Private constructor
-		/// </summary>
-		private DBConnectionManager()
-		{
-		}
+        providers[dataSourceName] = provider;
+    }
 
-        /// <summary>
-        /// Adds the connection provider.
-        /// </summary>
-        /// <param name="dataSourceName">Name of the data source.</param>
-        /// <param name="provider">The provider.</param>
-        public virtual void AddConnectionProvider(string dataSourceName, IDbProvider provider)
-		{
-            log.Info($"Registering datasource '{dataSourceName}' with db provider: '{provider}'");
+    /// <summary>
+    /// Get a database connection from the DataSource with the given name.
+    /// </summary>
+    /// <returns> a database connection </returns>
+    public DbConnection GetConnection(string dataSourceName)
+    {
+        var provider = GetDbProvider(dataSourceName);
+        return provider.CreateConnection();
+    }
 
-            lock (syncRoot)
-            {
-			providers[dataSourceName] = provider;
-		}
+    /// <summary>
+    /// Shuts down database connections from the DataSource with the given name,
+    /// if applicable for the underlying provider.
+    /// </summary>
+    public void Shutdown(string dataSourceName)
+    {
+        IDbProvider provider = GetDbProvider(dataSourceName);
+        provider.Shutdown();
+    }
+
+    public DbMetadata GetDbMetadata(string dataSourceName)
+    {
+        return GetDbProvider(dataSourceName).Metadata;
+    }
+
+    /// <summary>
+    /// Gets the db provider.
+    /// </summary>
+    /// <param name="dataSourceName">Name of the ds.</param>
+    /// <returns></returns>
+    public IDbProvider GetDbProvider(string dataSourceName)
+    {
+        if (string.IsNullOrEmpty(dataSourceName))
+        {
+            ThrowHelper.ThrowArgumentException("DataSource name cannot be null or empty", nameof(dataSourceName));
         }
 
-		/// <summary>
-		/// Get a database connection from the DataSource with the given name.
-		/// </summary>
-		/// <returns> a database connection </returns>
-        public virtual DbConnection GetConnection(string dataSourceName)
-		{
-            var provider = GetDbProvider(dataSourceName);
-			return provider.CreateConnection();
-		}
-
-        /// <summary>
-		/// Shuts down database connections from the DataSource with the given name,
-		/// if applicable for the underlying provider.
-		/// </summary>
-		public virtual void Shutdown(string dsName)
-		{
-		    IDbProvider provider = GetDbProvider(dsName);
-			provider.Shutdown();
-		}
-
-	    public DbMetadata GetDbMetadata(string dsName)
-	    {
-            return GetDbProvider(dsName).Metadata;
+        if (!providers.TryGetValue(dataSourceName, out IDbProvider? provider))
+        {
+            ThrowHelper.ThrowArgumentException($"There is no DataSource named '{dataSourceName}'", nameof(dataSourceName));
         }
 
-        /// <summary>
-        /// Gets the db provider.
-        /// </summary>
-        /// <param name="dsName">Name of the ds.</param>
-        /// <returns></returns>
-	    public IDbProvider GetDbProvider(string dsName)
-	    {
-            if (string.IsNullOrEmpty(dsName))
-            {
-                throw new ArgumentException("DataSource name cannot be null or empty", nameof(dsName));
-            }
-
-            IDbProvider? provider;
-            lock (syncRoot)
-            {
-                providers.TryGetValue(dsName, out provider);
-            }
-
-            if (provider == null)
-            {
-                throw new Exception($"There is no DataSource named '{dsName}'");
-            }
-
-            return provider;
-        }
-	}
+        return provider;
+    }
 }

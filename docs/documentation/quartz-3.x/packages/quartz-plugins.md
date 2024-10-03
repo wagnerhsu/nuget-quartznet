@@ -1,19 +1,25 @@
-[Quartz.Plugins](https://www.nuget.org/packages/Quartz.Plugins) provides some useful ready-mady plugins for your convenience.
+---
+
+title : Plugins
+---
+
+[Quartz.Plugins](https://www.nuget.org/packages/Quartz.Plugins) provides some useful ready-made plugins for your convenience.
 
 ## Installation
 
 You need to add NuGet package reference to your project which uses Quartz.
 
-    Install-Package Quartz.Plugins
+```shell
+Install-Package Quartz.Plugins
+```
 
 ## Configuration
 
-Plugins are configured by using either DI configuration extensions or adding required configuration keys. 
+Plugins are configured by using either DI configuration extensions or adding required configuration keys.
 
-Configuration key in in format `quartz.plgin.{name-to-refer-with}.{property}`.
+Configuration key in in format `quartz.plugin.{name-to-refer-with}.{property}`.
 
 [See configuration reference](../configuration/reference.html#plug-ins) on how to configure each plugin
-
 
 ## Features
 
@@ -27,12 +33,11 @@ This plugin catches the event of the VM terminating (such as upon a CRTL-C) and 
 
 ### XMLSchedulingDataProcessorPlugin
 
-This plugin loads XML file(s) to add jobs and schedule them with triggers as the scheduler is initialized, and can optionally periodically scan thefile for changes.
+This plugin loads XML file(s) to add jobs and schedule them with triggers as the scheduler is initialized, and can optionally periodically scan the file for changes.
 
 ::: warning
 The periodically scanning of files for changes is not currently supported in a clustered environment.
 :::
-
 
 ### JobInterruptMonitorPlugin
 
@@ -50,6 +55,6 @@ var job = JobBuilder.Create<SlowJob>()
     .WithIdentity("slowJob")
     .UsingJobData(JobInterruptMonitorPlugin.JobDataMapKeyAutoInterruptable, true)
     // allow only five seconds for this job, overriding default configuration
-    .UsingJobData(JobInterruptMonitorPlugin.JobDataMapKeyMaxRunTime, TimeSpan.FromSeconds(5).TotalMilliseconds.ToString()));
+    .UsingJobData(JobInterruptMonitorPlugin.JobDataMapKeyMaxRunTime, TimeSpan.FromSeconds(5).TotalMilliseconds.ToString(CultureInfo.InvariantCulture))
     .Build();
 ```

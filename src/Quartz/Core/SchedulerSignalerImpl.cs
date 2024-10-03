@@ -17,92 +17,90 @@
  */
 #endregion
 
-using System;
-using System.Threading;
-using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 
-using Quartz.Logging;
+using Quartz.Diagnostics;
 using Quartz.Spi;
 
-namespace Quartz.Core
+namespace Quartz.Core;
+
+/// <summary>
+/// An interface to be used by <see cref="IJobStore" /> instances in order to
+/// communicate signals back to the <see cref="QuartzScheduler" />.
+/// </summary>
+/// <author>James House</author>
+/// <author>Marko Lahma (.NET)</author>
+internal sealed class SchedulerSignalerImpl : ISchedulerSignaler
 {
-	/// <summary>
-	/// An interface to be used by <see cref="IJobStore" /> instances in order to
-	/// communicate signals back to the <see cref="QuartzScheduler" />.
-	/// </summary>
-	/// <author>James House</author>
-	/// <author>Marko Lahma (.NET)</author>
-	public class SchedulerSignalerImpl : ISchedulerSignaler
-	{
-		private readonly ILog log = LogProvider.GetLogger(typeof (SchedulerSignalerImpl));
-        protected readonly QuartzScheduler sched;
-        protected readonly QuartzSchedulerThread schedThread;
+    private readonly ILogger<SchedulerSignalerImpl> logger = LogProvider.CreateLogger<SchedulerSignalerImpl>();
+    private readonly QuartzScheduler sched;
+    private readonly QuartzSchedulerThread schedThread;
 
-        public SchedulerSignalerImpl(QuartzScheduler sched, QuartzSchedulerThread schedThread)
+    public SchedulerSignalerImpl(QuartzScheduler sched, QuartzSchedulerThread schedThread)
+    {
+        this.sched = sched;
+        this.schedThread = schedThread;
+
+        logger.LogInformation("Initialized Scheduler Signaller of type: {Type}", GetType());
+    }
+
+
+    /// <summary>
+    /// Notifies the scheduler about misfired trigger.
+    /// </summary>
+    /// <param name="trigger">The trigger that misfired.</param>
+    /// <param name="cancellationToken">The cancellation instruction.</param>
+    public async ValueTask NotifyTriggerListenersMisfired(
+        ITrigger trigger,
+        CancellationToken cancellationToken = default)
+    {
+        try
         {
-            this.sched = sched;
-            this.schedThread = schedThread;
-
-            log.Info("Initialized Scheduler Signaller of type: " + GetType());
+            await sched.NotifyTriggerListenersMisfired(trigger, cancellationToken).ConfigureAwait(false);
         }
-
-
-        /// <summary>
-        /// Notifies the scheduler about misfired trigger.
-        /// </summary>
-        /// <param name="trigger">The trigger that misfired.</param>
-        /// <param name="cancellationToken">The cancellation instruction.</param>
-        public virtual async Task NotifyTriggerListenersMisfired(
-            ITrigger trigger,
-            CancellationToken cancellationToken = default)
+        catch (SchedulerException se)
         {
-            try
-            {
-                await sched.NotifyTriggerListenersMisfired(trigger, cancellationToken).ConfigureAwait(false);
-            }
-            catch (SchedulerException se)
-            {
-                log.ErrorException("Error notifying listeners of trigger misfire.", se);
-                await sched.NotifySchedulerListenersError("Error notifying listeners of trigger misfire.", se, cancellationToken).ConfigureAwait(false);
-            }
+            logger.LogError(se, "Error notifying listeners of trigger misfire.");
+            await sched.NotifySchedulerListenersError("Error notifying listeners of trigger misfire.", se, cancellationToken).ConfigureAwait(false);
         }
+    }
 
 
-        /// <summary>
-        /// Notifies the scheduler about finalized trigger.
-        /// </summary>
-        /// <param name="trigger">The trigger that has finalized.</param>
-        /// <param name="cancellationToken">The cancellation instruction.</param>
-        public Task NotifySchedulerListenersFinalized(
-            ITrigger trigger,
-            CancellationToken cancellationToken = default)
-        {
-            return sched.NotifySchedulerListenersFinalized(trigger, cancellationToken);
-        }
+    /// <summary>
+    /// Notifies the scheduler about finalized trigger.
+    /// </summary>
+    /// <param name="trigger">The trigger that has finalized.</param>
+    /// <param name="cancellationToken">The cancellation instruction.</param>
+    public ValueTask NotifySchedulerListenersFinalized(
+        ITrigger trigger,
+        CancellationToken cancellationToken = default)
+    {
+        return sched.NotifySchedulerListenersFinalized(trigger, cancellationToken);
+    }
 
-        /// <summary>
-        /// Signals the scheduling change.
-        /// </summary>
-        public void SignalSchedulingChange(
-            DateTimeOffset? candidateNewNextFireTime,
-            CancellationToken cancellationToken = default)
-        {
-            schedThread.SignalSchedulingChange(candidateNewNextFireTime);
-        }
+    /// <summary>
+    /// Signals the scheduling change.
+    /// </summary>
+    public ValueTask SignalSchedulingChange(
+        DateTimeOffset? candidateNewNextFireTime,
+        CancellationToken cancellationToken = default)
+    {
+        schedThread.SignalSchedulingChange(candidateNewNextFireTime);
+        return default;
+    }
 
-        public Task NotifySchedulerListenersJobDeleted(
-            JobKey jobKey,
-            CancellationToken cancellationToken = default)
-        {
-            return sched.NotifySchedulerListenersJobDeleted(jobKey, cancellationToken);
-        }
+    public ValueTask NotifySchedulerListenersJobDeleted(
+        JobKey jobKey,
+        CancellationToken cancellationToken = default)
+    {
+        return sched.NotifySchedulerListenersJobDeleted(jobKey, cancellationToken);
+    }
 
-        public Task NotifySchedulerListenersError(
-            string message,
-            SchedulerException jpe,
-            CancellationToken cancellationToken = default)
-        {
-            return sched.NotifySchedulerListenersError(message, jpe, cancellationToken);
-        }
+    public ValueTask NotifySchedulerListenersError(
+        string message,
+        SchedulerException jpe,
+        CancellationToken cancellationToken = default)
+    {
+        return sched.NotifySchedulerListenersError(message, jpe, cancellationToken);
     }
 }

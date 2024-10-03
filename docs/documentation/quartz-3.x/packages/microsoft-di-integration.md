@@ -1,3 +1,8 @@
+---
+
+title: Microsoft DI Integration
+---
+
 [Quartz.Extensions.DependencyInjection](https://www.nuget.org/packages/Quartz.Extensions.DependencyInjection)
 provides integration with [Microsoft Dependency Injection](https://docs.microsoft.com/en-us/aspnet/core/fundamentals/dependency-injection).
 
@@ -9,13 +14,19 @@ Quartz 3.1 or later required.
 
 You need to add NuGet package reference to your project which uses Quartz.
 
-    Install-Package Quartz.Extensions.DependencyInjection
+```shell
+Install-Package Quartz.Extensions.DependencyInjection
+```
 
 ## Using
 
 You can add Quartz configuration by invoking an extension method `AddQuartz` on `IServiceCollection`.
 The configuration building wraps various [configuration properties](../configuration/reference) with strongly-typed API.
 You can also configure properties using standard .NET Core `appsettings.json` inside configuration section `Quartz`.
+
+::: tip
+The section should be bound manually to `QuartzOptions` type with `AddOptions` or `Configure` as in [this example](https://github.com/quartznet/quartznet/blob/a4511ef0703206cf483c6331d5b2ac7fb69d26d3/src/Quartz.Examples.AspNetCore/Startup.cs#L71).
+:::
 
 ::: tip
 [Quartz.Extensions.Hosting](hosted-services-integration.md) allows you to have a background service for your application that handles starting and stopping the scheduler.
@@ -43,9 +54,9 @@ You can also configure properties using standard .NET Core `appsettings.json` in
 Quartz comes with two built-in alternatives for job factory which can be configured via either calling `UseMicrosoftDependencyInjectionJobFactory` or `UseMicrosoftDependencyInjectionScopedJobFactory` (deprecated).
 
 ::: tip
-As of Quartz.NET 3.3.2 all jobs produced by the default job factory are scoped jobs, you should no longer use `UseMicrosoftDependencyInjectionScopedJobFactory`.
+As of Quartz.NET 3.3.2 all jobs produced by the default job factory are scoped jobs, you should no longer use `UseMicrosoftDependencyInjectionJobFactory` or `UseMicrosoftDependencyInjectionScopedJobFactory`.
 :::
- 
+
 ### Job instance construction
 
 By default Quartz will try to resolve job's type from container and if there's no explicit registration Quartz will use `ActivatorUtilities` to construct job and inject it's dependencies
@@ -53,7 +64,7 @@ via constructor. Job should have only one public constructor.
 
 ### Persistent job stores
 
-The scheduling configuration will be checked against database and updated accordingly every time your application starts and schedule is being evaluated. 
+The scheduling configuration will be checked against database and updated accordingly every time your application starts and schedule is being evaluated.
 
 ::: warning
 When using persistent job store, make sure you define job and trigger names for your scheduling so that existence checks work correctly against
@@ -61,7 +72,7 @@ the data you already have in your database.
 
 Using API to configure triggers and jobs without explicit job identity configuration will cause jobs and triggers to have different generated name each time configuration is being evaluated.
 
-With persistent job stores it's best practice to always declare at least job and trigger name. Omitting the group for them will produce same default group value for every invocation. 
+With persistent job stores it's best practice to always declare at least job and trigger name. Omitting the group for them will produce same default group value for every invocation.
 :::
 
 **Example Startup.ConfigureServices configuration**
@@ -83,16 +94,10 @@ public void ConfigureServices(IServiceCollection services)
     {
         // handy when part of cluster or you want to otherwise identify multiple schedulers
         q.SchedulerId = "Scheduler-Core";
-        
+
         // we take this from appsettings.json, just show it's possible
         // q.SchedulerName = "Quartz ASP.NET Core Sample Scheduler";
-        
-        // as of 3.3.2 this also injects scoped services (like EF DbContext) without problems
-        q.UseMicrosoftDependencyInjectionJobFactory();
 
-        // or for scoped service support like EF Core DbContext
-        // q.UseMicrosoftDependencyInjectionScopedJobFactory();
-        
         // these are the defaults
         q.UseSimpleTypeLoader();
         q.UseInMemoryStore();
@@ -125,7 +130,7 @@ public void ConfigureServices(IServiceCollection services)
         );
 
         q.AddTrigger(t => t
-            .WithIdentity("Simple Trigger")    
+            .WithIdentity("Simple Trigger")
             .ForJob(jobKey)
             .StartNow()
             .WithSimpleSchedule(x => x.WithInterval(TimeSpan.FromSeconds(10)).RepeatForever())
@@ -133,7 +138,7 @@ public void ConfigureServices(IServiceCollection services)
         );
 
         q.AddTrigger(t => t
-            .WithIdentity("Cron Trigger")    
+            .WithIdentity("Cron Trigger")
             .ForJob(jobKey)
             .StartAt(DateBuilder.EvenSecondDate(DateTimeOffset.UtcNow.AddSeconds(3)))
             .WithCronSchedule("0/3 * * * * ?")
@@ -157,7 +162,7 @@ public void ConfigureServices(IServiceCollection services)
             .WithDescription("my awesome daily time interval trigger")
             .ModifiedByCalendar(calendarName)
         );
-        
+
         // also add XML configuration and poll it for changes
         q.UseXmlSchedulingConfiguration(x =>
         {
@@ -169,7 +174,7 @@ public void ConfigureServices(IServiceCollection services)
 
         // convert time zones using converter that can handle Windows/Linux differences
         q.UseTimeZoneConverter();
-        
+
         // auto-interrupt long-running job
         q.UseJobAutoInterrupt(options =>
         {
@@ -196,7 +201,8 @@ public void ConfigureServices(IServiceCollection services)
         /*
         q.UsePersistentStore(s =>
         {
-            s.UseProperties = true;
+            s.PerformSchemaValidation = true; // default
+            s.UseProperties = true; // preferred, but not default
             s.RetryInterval = TimeSpan.FromSeconds(15);
             s.UseSqlServer(sqlServer =>
             {
@@ -213,27 +219,27 @@ public void ConfigureServices(IServiceCollection services)
         });
         */
     });
-	
-	// we can use options pattern to support hooking your own configuration
-	// because we don't use service registration api, 
-	// we need to manually ensure the job is present in DI
-	services.AddTransient<ExampleJob>();
-				
-	services.Configure<SampleOptions>(Configuration.GetSection("Sample"));
-	services.AddOptions<QuartzOptions>()
-		.Configure<IOptions<SampleOptions>>((options, dep) =>
-		{
-			if (!string.IsNullOrWhiteSpace(dep.Value.CronSchedule))
-			{
-				var jobKey = new JobKey("options-custom-job", "custom");
-				options.AddJob<ExampleJob>(j => j.WithIdentity(jobKey));
-				options.AddTrigger(trigger => trigger
-					.WithIdentity("options-custom-trigger", "custom")
-					.ForJob(jobKey)
-					.WithCronSchedule(dep.Value.CronSchedule));
-			}
-		});	
-		
+
+ // we can use options pattern to support hooking your own configuration
+ // because we don't use service registration api,
+ // we need to manually ensure the job is present in DI
+ services.AddTransient<ExampleJob>();
+
+ services.Configure<SampleOptions>(Configuration.GetSection("Sample"));
+ services.AddOptions<QuartzOptions>()
+  .Configure<IOptions<SampleOptions>>((options, dep) =>
+  {
+   if (!string.IsNullOrWhiteSpace(dep.Value.CronSchedule))
+   {
+    var jobKey = new JobKey("options-custom-job", "custom");
+    options.AddJob<ExampleJob>(j => j.WithIdentity(jobKey));
+    options.AddTrigger(trigger => trigger
+     .WithIdentity("options-custom-trigger", "custom")
+     .ForJob(jobKey)
+     .WithCronSchedule(dep.Value.CronSchedule));
+   }
+  });
+
     // Quartz.Extensions.Hosting allows you to fire background service that handles scheduler lifecycle
     services.AddQuartzHostedService(options =>
     {

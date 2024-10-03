@@ -1,45 +1,45 @@
-﻿using System;
-using System.Threading.Tasks;
-
-using NUnit.Framework;
-
 using Quartz.Impl;
 using Quartz.Impl.AdoJobStore;
-using Quartz.Impl.AdoJobStore.Common;
 using Quartz.Simpl;
 using Quartz.Spi;
-using Quartz.Util;
+using Quartz.Tests.Integration.Utils;
 
-namespace Quartz.Tests.Integration
+namespace Quartz.Tests.Integration;
+
+[TestFixture(typeof(SystemTextJsonObjectSerializer), TestConstants.DefaultSqlServerProvider, Category = "db-sqlserver")]
+[TestFixture(typeof(SystemTextJsonObjectSerializer), TestConstants.PostgresProvider, Category = "db-postgres")]
+[TestFixture(typeof(NewtonsoftJsonObjectSerializer), TestConstants.DefaultSqlServerProvider, Category = "db-sqlserver")]
+[TestFixture(typeof(NewtonsoftJsonObjectSerializer), TestConstants.PostgresProvider, Category = "db-postgres")]
+public class AdoSchedulerTest : AbstractSchedulerTest
 {
-    [Category("sqlserver")]
-    [TestFixture(typeof(BinaryObjectSerializer))]
-    [TestFixture(typeof(JsonObjectSerializer))]
-    public class AdoSchedulerTest : AbstractSchedulerTest
+    private readonly IObjectSerializer serializer;
+
+    static AdoSchedulerTest()
     {
-        private readonly IObjectSerializer serializer;
+        SystemTextJsonObjectSerializer.AddTriggerSerializer<TestBlobCronTriggerImpl>(new TestBlobCronTriggerImpl.SystemTextJsonSerializer());
+    }
 
-        public AdoSchedulerTest(Type serializerType)
+    public AdoSchedulerTest(Type serializerType, string provider) : base(provider, serializerType.Name)
+    {
+        serializer = (IObjectSerializer) Activator.CreateInstance(serializerType);
+        serializer.Initialize();
+    }
+
+    protected override async ValueTask<IScheduler> CreateScheduler(string name, int threadPoolSize)
+    {
+        DatabaseHelper.RegisterDatabaseSettingsForProvider(provider, out var driverDelegateType);
+
+        var jobStore = new JobStoreTX
         {
-            serializer = (IObjectSerializer) Activator.CreateInstance(serializerType);
-            serializer.Initialize();
-        }
+            DataSource = "default",
+            TablePrefix = "QRTZ_",
+            InstanceId = "AUTO",
+            DriverDelegateType = driverDelegateType,
+            ObjectSerializer = serializer
+        };
 
-        protected override Task<IScheduler> CreateScheduler(string name, int threadPoolSize)
-        {
-            DBConnectionManager.Instance.AddConnectionProvider("default", new DbProvider(TestConstants.DefaultSqlServerProvider, TestConstants.SqlServerConnectionString));
-
-            var jobStore = new JobStoreTX
-            {
-                DataSource = "default",
-                TablePrefix = "QRTZ_",
-                InstanceId = "AUTO",
-                DriverDelegateType = typeof(SqlServerDelegate).AssemblyQualifiedName,
-                ObjectSerializer = serializer
-            };
-
-            DirectSchedulerFactory.Instance.CreateScheduler(name + "Scheduler", "AUTO", new DefaultThreadPool(), jobStore);
-            return SchedulerRepository.Instance.Lookup(name + "Scheduler");
-        }
+        var schedulerName = CreateSchedulerName(name);
+        await DirectSchedulerFactory.Instance.CreateScheduler(schedulerName, "AUTO", new DefaultThreadPool(), jobStore);
+        return SchedulerRepository.Instance.Lookup(schedulerName);
     }
 }

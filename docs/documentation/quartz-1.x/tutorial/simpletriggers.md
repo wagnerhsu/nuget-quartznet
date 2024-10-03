@@ -1,9 +1,10 @@
 ---
+
 title: 'Lesson 5: SimpleTrigger'
 ---
 
 SimpleTrigger should meet your scheduling needs if you need to have a job execute exactly once at a specific moment in time,
-or at a specific moment in time followed by repeats at a specific interval. Or plainer english, if you want the trigger to
+or at a specific moment in time followed by repeats at a specific interval. Or plainer English, if you want the trigger to
 fire at exactly 11:23:54 AM on January 13, 2005, and then fire five more times, every ten seconds.
 
 With this description, you may not find it surprising to find that the properties of a SimpleTrigger include: a start-time,
@@ -74,6 +75,7 @@ TimeSpan.FromSeconds(60));
          SimpleTrigger.RepeatIndefinitely,
          TimeSpan.FromSeconds(10));
 ```
+
 __SimpleTrigger Example 4 - Create a trigger that fires on March 17 of the year 2002 at precisely 10:30 am, and repeats 5 times
 (for a total of 6 firings) - with a 30 second delay between each firing__
 

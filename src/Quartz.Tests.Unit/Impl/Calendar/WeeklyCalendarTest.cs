@@ -17,97 +17,95 @@
  */
 #endregion
 
-using System;
-
-using NUnit.Framework;
-
 using Quartz.Impl.Calendar;
 using Quartz.Simpl;
 using Quartz.Util;
 
-namespace Quartz.Tests.Unit.Impl.Calendar
+namespace Quartz.Tests.Unit.Impl.Calendar;
+
+/// <author>Marko Lahma (.NET)</author>
+[TestFixture(typeof(NewtonsoftJsonObjectSerializer))]
+[TestFixture(typeof(SystemTextJsonObjectSerializer))]
+public class WeeklyCalendarTest : SerializationTestSupport<WeeklyCalendar, ICalendar>
 {
-    /// <author>Marko Lahma (.NET)</author>
-    [TestFixture(typeof(BinaryObjectSerializer))]
-    [TestFixture(typeof(JsonObjectSerializer))]
-    public class WeeklyCalendarTest : SerializationTestSupport<WeeklyCalendar, ICalendar>
+    private WeeklyCalendar cal;
+
+    public WeeklyCalendarTest(Type serializerType) : base(serializerType)
     {
-        private WeeklyCalendar cal;
+    }
 
-        public WeeklyCalendarTest(Type serializerType) : base(serializerType)
+    [SetUp]
+    public void Setup()
+    {
+        cal = new WeeklyCalendar();
+        cal.TimeZone = TimeZoneInfo.Utc; //assume utc if not specified.
+    }
+
+    [Test]
+    public void TestAddAndRemoveExclusion()
+    {
+        cal.SetDayExcluded(DayOfWeek.Monday, true);
+        Assert.That(cal.IsDayExcluded(DayOfWeek.Monday), Is.True);
+        cal.SetDayExcluded(DayOfWeek.Monday, false);
+        Assert.That(cal.IsDayExcluded(DayOfWeek.Monday), Is.False);
+    }
+
+    [Test]
+    public void TestWeekDayExclusion()
+    {
+        // this is friday
+        DateTimeOffset excluded = new DateTimeOffset(2007, 8, 3, 0, 0, 0, TimeSpan.Zero);
+        cal.SetDayExcluded(DayOfWeek.Friday, true);
+        // next monday should be next possible
+        Assert.That(cal.GetNextIncludedTimeUtc(excluded), Is.EqualTo(excluded.AddDays(3)));
+    }
+
+
+    [Test]
+    public void TestDaylightSavingTransition()
+    {
+        cal.TimeZone = TimeZoneUtil.FindTimeZoneById("Eastern Standard Time");
+        cal.SetDayExcluded(DayOfWeek.Monday, false); //Monday only
+        cal.SetDayExcluded(DayOfWeek.Tuesday, true);
+        cal.SetDayExcluded(DayOfWeek.Wednesday, true);
+        cal.SetDayExcluded(DayOfWeek.Thursday, true);
+        cal.SetDayExcluded(DayOfWeek.Friday, true);
+        cal.SetDayExcluded(DayOfWeek.Saturday, true);
+        cal.SetDayExcluded(DayOfWeek.Sunday, true);
+
+        //11/5/2012 12:00:00 AM -04:00 will translate into 11/4/2012 11:00:00 PM -05:00, which is a Sunday, not monday
+        DateTimeOffset date = new DateTimeOffset(2012, 11, 5, 0, 0, 0, TimeSpan.FromHours(-4));
+        Assert.That(cal.IsTimeIncluded(date), Is.False);
+
+        date = cal.GetNextIncludedTimeUtc(date);
+        DateTimeOffset expected = new DateTimeOffset(2012, 11, 5, 0, 0, 0, TimeSpan.FromHours(-5));
+
+        Assert.That(date, Is.EqualTo(expected));
+    }
+
+
+
+    /// <summary>
+    /// Get the object to serialize when generating serialized file for future
+    /// tests, and against which to validate deserialized object.
+    /// </summary>
+    /// <returns></returns>
+    protected override WeeklyCalendar GetTargetObject()
+    {
+        WeeklyCalendar c = new WeeklyCalendar();
+        c.Description = "description";
+        c.SetDayExcluded(DayOfWeek.Thursday, true);
+        return c;
+    }
+
+    protected override void VerifyMatch(WeeklyCalendar original, WeeklyCalendar deserialized)
+    {
+        Assert.Multiple(() =>
         {
-        }
-
-        [SetUp]
-        public void Setup()
-        {
-            cal = new WeeklyCalendar();
-            cal.TimeZone = TimeZoneInfo.Utc; //assume utc if not specified.
-        }
-
-        [Test]
-        public void TestAddAndRemoveExclusion()
-        {
-            cal.SetDayExcluded(DayOfWeek.Monday, true);
-            Assert.IsTrue(cal.IsDayExcluded(DayOfWeek.Monday));
-            cal.SetDayExcluded(DayOfWeek.Monday, false);
-            Assert.IsFalse(cal.IsDayExcluded(DayOfWeek.Monday));
-        }
-
-        [Test]
-        public void TestWeekDayExclusion()
-        {
-            // this is friday
-            DateTimeOffset excluded = new DateTimeOffset(2007, 8, 3, 0, 0, 0, TimeSpan.Zero);
-            cal.SetDayExcluded(DayOfWeek.Friday, true);
-            // next monday should be next possible
-            Assert.AreEqual(excluded.AddDays(3), cal.GetNextIncludedTimeUtc(excluded));
-        }
-
-
-        [Test]
-        public void TestDaylightSavingTransition()
-        {
-            cal.TimeZone = TimeZoneUtil.FindTimeZoneById("Eastern Standard Time");
-            cal.SetDayExcluded(DayOfWeek.Monday, false); //Monday only
-            cal.SetDayExcluded(DayOfWeek.Tuesday, true);
-            cal.SetDayExcluded(DayOfWeek.Wednesday, true);
-            cal.SetDayExcluded(DayOfWeek.Thursday, true);
-            cal.SetDayExcluded(DayOfWeek.Friday, true);
-            cal.SetDayExcluded(DayOfWeek.Saturday, true);
-            cal.SetDayExcluded(DayOfWeek.Sunday, true);
-
-            //11/5/2012 12:00:00 AM -04:00 will translate into 11/4/2012 11:00:00 PM -05:00, which is a Sunday, not monday
-            DateTimeOffset date = new DateTimeOffset(2012, 11, 5, 0, 0, 0, TimeSpan.FromHours(-4));
-            Assert.IsFalse(cal.IsTimeIncluded(date));
-
-            date = cal.GetNextIncludedTimeUtc(date);
-            DateTimeOffset expected = new DateTimeOffset(2012, 11, 5, 0, 0, 0, TimeSpan.FromHours(-5));
-
-            Assert.AreEqual(expected, date);
-        }
-
-
-
-        /// <summary>
-        /// Get the object to serialize when generating serialized file for future
-        /// tests, and against which to validate deserialized object.
-        /// </summary>
-        /// <returns></returns>
-        protected override WeeklyCalendar GetTargetObject()
-        {
-            WeeklyCalendar c = new WeeklyCalendar();
-            c.Description = "description";
-            c.SetDayExcluded(DayOfWeek.Thursday, true);
-            return c;
-        }
-
-        protected override void VerifyMatch(WeeklyCalendar original, WeeklyCalendar deserialized)
-        {
-            Assert.IsNotNull(deserialized);
-            Assert.AreEqual(original.Description, deserialized.Description);
-            Assert.AreEqual(original.DaysExcluded, deserialized.DaysExcluded);
-            Assert.AreEqual(original.TimeZone, deserialized.TimeZone);
-        }
+            Assert.That(deserialized, Is.Not.Null);
+            Assert.That(deserialized.Description, Is.EqualTo(original.Description));
+            Assert.That(deserialized.DaysExcluded, Is.EqualTo(original.DaysExcluded));
+            Assert.That(deserialized.TimeZone, Is.EqualTo(original.TimeZone));
+        });
     }
 }

@@ -1,51 +1,78 @@
 using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
 
 using Quartz.Spi;
 
-namespace Quartz.Core
+namespace Quartz.Core;
+
+/// <summary>
+/// ExecutingJobsManager - Job Listener Class.
+/// </summary>
+internal sealed class ExecutingJobsManager : IJobListener
 {
+    private readonly ConcurrentDictionary<string, IJobExecutionContext> executingJobs = new ConcurrentDictionary<string, IJobExecutionContext>();
+    private int numJobsFired;
+
     /// <summary>
-    /// ExecutingJobsManager - Job Listener Class.
+    /// Initializes a new <see cref="ExecutingJobsManager"/> instance.
     /// </summary>
-    internal class ExecutingJobsManager : IJobListener
+    public ExecutingJobsManager()
     {
-        public virtual string Name => GetType()!.FullName!;
+        Name = GetType().ToString();
+    }
 
-        public virtual int NumJobsCurrentlyExecuting => executingJobs.Count;
+    /// <summary>
+    /// Get the name of the <see cref="IJobListener" />.
+    /// </summary>
+    /// <value>
+    /// The name of the <see cref="IJobListener" />.
+    /// </value>
+    public string Name { get; }
 
-        public virtual int NumJobsFired => numJobsFired;
+    /// <summary>
+    /// Gets the number of jobs that are currently executing.
+    /// </summary>
+    /// <value>
+    /// The number of jobs that are currently executing.
+    /// </value>
+    public int NumJobsCurrentlyExecuting => executingJobs.Count;
 
-        public virtual IReadOnlyCollection<IJobExecutionContext> ExecutingJobs => new List<IJobExecutionContext>(executingJobs.Values);
+    /// <summary>
+    /// Gets the number of jobs executed.
+    /// </summary>
+    /// <value>
+    /// The number of jobs executed.
+    /// </value>
+    public int NumJobsFired => numJobsFired;
 
-        private readonly ConcurrentDictionary<string, IJobExecutionContext> executingJobs = new ConcurrentDictionary<string, IJobExecutionContext>();
+    /// <summary>
+    /// Gets the jobs that are currently executing.
+    /// </summary>
+    /// <value>
+    /// The jobs that are currently executing.
+    /// </value>
+    public List<IJobExecutionContext> GetExecutingJobs => [..executingJobs.Values];
 
-        private int numJobsFired;
+    public ValueTask JobToBeExecuted(
+        IJobExecutionContext context,
+        CancellationToken cancellationToken = default)
+    {
+        Interlocked.Increment(ref numJobsFired);
+        executingJobs[((IOperableTrigger) context.Trigger).FireInstanceId] = context;
+        return default;
+    }
 
-        public virtual Task JobToBeExecuted(
-            IJobExecutionContext context,
-            CancellationToken cancellationToken = default)
-        {
-            Interlocked.Increment(ref numJobsFired);
-            executingJobs[((IOperableTrigger) context.Trigger).FireInstanceId] = context;
-            return Task.CompletedTask;
-        }
+    public ValueTask JobWasExecuted(IJobExecutionContext context,
+        JobExecutionException? jobException,
+        CancellationToken cancellationToken = default)
+    {
+        executingJobs.TryRemove(((IOperableTrigger) context.Trigger).FireInstanceId, out _);
+        return default;
+    }
 
-        public virtual Task JobWasExecuted(IJobExecutionContext context,
-            JobExecutionException? jobException,
-            CancellationToken cancellationToken = default)
-        {
-            executingJobs.TryRemove(((IOperableTrigger) context.Trigger).FireInstanceId, out _);
-            return Task.CompletedTask;
-        }
-
-        public virtual Task JobExecutionVetoed(
-            IJobExecutionContext context,
-            CancellationToken cancellationToken = default)
-        {
-            return Task.CompletedTask;
-        }
+    public ValueTask JobExecutionVetoed(
+        IJobExecutionContext context,
+        CancellationToken cancellationToken = default)
+    {
+        return default;
     }
 }

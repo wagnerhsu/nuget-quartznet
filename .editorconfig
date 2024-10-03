@@ -7,19 +7,12 @@ root = true
 # All files
 [*]
 indent_style = space
+trim_trailing_whitespace = true
 
 # Code files
 [*.cs]
 indent_size = 4
-charset = utf-8-bom
-
-# XML project files
-[*.{csproj,vbproj,vcxproj,vcxproj.filters,proj,projitems,shproj}]
-indent_size = 2
-
-# XML config files
-[*.{props,targets,ruleset,config,nuspec,resx,vsixmanifest,vsct}]
-indent_size = 2
+charset = utf-8
 
 #Formatting - new line options
 
@@ -33,6 +26,9 @@ csharp_new_line_before_finally = true
 csharp_new_line_before_members_in_object_initializers = true
 #require braces to be on a new line for accessors, methods, lambdas, object_collection_array_initializers, control_blocks, types, and properties (also known as "Allman" style)
 csharp_new_line_before_open_brace = accessors, methods, lambdas, object_collection_array_initializers, control_blocks, types, properties
+
+csharp_style_namespace_declarations = file_scoped:error
+dotnet_diagnostic.IDE0161.severity = error
 
 #Formatting - organize using options
 
@@ -122,7 +118,7 @@ dotnet_style_require_accessibility_modifiers = for_non_interface_members:suggest
 #Style - Modifier preferences
 
 #when this rule is set to a list of modifiers, prefer the specified ordering.
-csharp_preferred_modifier_order = public,private,protected,internal,virtual,static,override,async,readonly,abstract:suggestion
+csharp_preferred_modifier_order = public, private, protected, internal, virtual, static, override, async, readonly, abstract:suggestion
 
 #Style - Pattern matching
 
@@ -137,3 +133,11 @@ dotnet_style_qualification_for_field = false:suggestion
 dotnet_style_qualification_for_method = false:suggestion
 #prefer properties not to be prefaced with this. or Me. in Visual Basic
 dotnet_style_qualification_for_property = false:suggestion
+
+# XML project files
+[*.{csproj,vbproj,vcxproj,vcxproj.filters,proj,projitems,shproj}]
+indent_size = 2
+
+# XML config files
+[*.{props,targets,ruleset,config,nuspec,resx,vsixmanifest,vsct}]
+indent_size = 2

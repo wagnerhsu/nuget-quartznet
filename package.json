@@ -1,25 +1,30 @@
 {
   "name": "quartznet-docs",
-  "version": "0.1.0",
-  "description": "Quartz.NET Documentation",
-  "main": "index.js",
-  "devDependencies": {
-    "@vuepress/plugin-active-header-links": "^1.6.0",
-    "@vuepress/plugin-back-to-top": "^1.6.0",
-    "@vuepress/plugin-blog": "^1.9.2",
-    "@vuepress/plugin-google-analytics": "^1.6.0",
-    "vue": "^2.6.12",
-    "vuepress": "^1.6.0"
-  },
+  "private": true,
+  "type": "module",
   "dependencies": {
-    "esm": "^3.2.25",
-    "remove-markdown": "^0.3.0",
-    "vue-tweet-embed": "^2.4.0"
+    "@vuepress/bundler-vite": "2.0.0-rc.9",
+    "@vuepress/bundler-webpack": "2.0.0-rc.9",
+    "@vuepress/plugin-active-header-links": "2.0.0-rc.26",
+    "@vuepress/plugin-back-to-top": "2.0.0-rc.26",
+    "@vuepress/plugin-docsearch": "2.0.0-rc.26",
+    "@vuepress/plugin-google-analytics": "2.0.0-rc.21",
+    "@vuepress/plugin-redirect": "2.0.0-rc.26",
+    "@vuepress/plugin-register-components": "2.0.0-rc.21",
+    "@vuepress/theme-default": "2.0.0-rc.26",
+    "vuepress": "2.0.0-rc.9",
+    "webpack": "^5.91.0"
   },
   "scripts": {
-    "docs:build": "bash -c \"rm -rf docs/.vuepress/dist\" && vuepress build docs",
+    "docs:build": "vuepress-cli build docs --clean-cache --clean-temp",
+    "docs:build-webpack": "DOCS_BUNDLER=webpack pnpm docs:build",
+    "docs:clean": "rimraf .vuepress/.temp .vuepress/.cache .vuepress/dist",
+    "docs:dev": "vuepress-cli dev docs --clean-cache --clean-temp",
+    "docs:dev-webpack": "DOCS_BUNDLER=webpack pnpm docs:dev",
+    "docs:serve": "anywhere -s -h localhost -d .vuepress/dist",
     "docs:publish": "cd docs/.vuepress/dist && git init && git fetch https://github.com/quartznet/quartznet.github.io.git && git checkout 9966bc53c0685311bc9199498ef2338629f6ec4d && git checkout -b master && git add . && git commit -am \"Deploy Documentation\" && git push --force --set-upstream https://github.com/quartznet/quartznet.github.io.git master",
-    "docs:dev": "vuepress dev docs"
+    "docs:lint": "markdownlint-cli2 docs/**/*.md",
+    "docs:lint-fix": "markdownlint-cli2-fix docs/**/*.md !docs/_posts/**"
   },
   "repository": {
     "type": "git",
@@ -30,5 +35,9 @@
   "bugs": {
     "url": "https://github.com/quartznet/quartznet/issues"
   },
-  "homepage": "https://github.com/quartznet/quartznet"
+  "homepage": "https://github.com/quartznet/quartznet",
+  "devDependencies": {
+    "markdownlint": "^0.34.0",
+    "markdownlint-cli2": "^0.13.0"
+  }
 }

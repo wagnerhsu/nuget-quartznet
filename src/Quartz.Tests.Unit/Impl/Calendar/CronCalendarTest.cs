@@ -19,71 +19,69 @@
 
 #endregion
 
-using System;
-
-using NUnit.Framework;
-
 using Quartz.Impl.Calendar;
 using Quartz.Simpl;
 
-namespace Quartz.Tests.Unit.Impl.Calendar
+namespace Quartz.Tests.Unit.Impl.Calendar;
+
+/// <author>Marko Lahma (.NET)</author>
+[TestFixture(typeof(NewtonsoftJsonObjectSerializer))]
+[TestFixture(typeof(SystemTextJsonObjectSerializer))]
+public class CronCalendarTest : SerializationTestSupport<CronCalendar, ICalendar>
 {
-    /// <author>Marko Lahma (.NET)</author>
-    [TestFixture(typeof(BinaryObjectSerializer))]
-    [TestFixture(typeof(JsonObjectSerializer))]
-    public class CronCalendarTest : SerializationTestSupport<CronCalendar, ICalendar>
+    public CronCalendarTest(Type serializerType) : base(serializerType)
     {
-        public CronCalendarTest(Type serializerType) : base(serializerType)
-        {
-        }
-        
-        [Test]
-        public void TestTimeIncluded()
-        {
-            CronCalendar calendar = new CronCalendar("0/15 * * * * ?");
-            string fault = "Time was included when it was not supposed to be";
-            DateTime tst = DateTime.UtcNow.AddMinutes(2);
-            tst = new DateTime(tst.Year, tst.Month, tst.Day, tst.Hour, tst.Minute, 30);
-            Assert.IsFalse(calendar.IsTimeIncluded(tst), fault);
+    }
 
-            calendar.SetCronExpressionString("0/25 * * * * ?");
-            fault = "Time was not included as expected";
-            Assert.IsTrue(calendar.IsTimeIncluded(tst), fault);
-        }
+    [Test]
+    public void TestTimeIncluded()
+    {
+        CronCalendar calendar = new CronCalendar("0/15 * * * * ?");
+        string fault = "Time was included when it was not supposed to be";
+        DateTime tst = DateTime.UtcNow.AddMinutes(2);
+        tst = new DateTime(tst.Year, tst.Month, tst.Day, tst.Hour, tst.Minute, 30);
+        Assert.That(calendar.IsTimeIncluded(tst), Is.False, fault);
 
-        [Test]
-        public void TestClone()
-        {
-            CronCalendar calendar = new CronCalendar("0/15 * * * * ?");
-            CronCalendar clone = (CronCalendar) calendar.Clone();
-            Assert.AreEqual(calendar.CronExpression, clone.CronExpression);
-        }
+        calendar.SetCronExpressionString("0/25 * * * * ?");
+        fault = "Time was not included as expected";
+        Assert.That(calendar.IsTimeIncluded(tst), Is.True, fault);
+    }
 
-        [Test]
-        public void MillisecondsShouldBeIgnored()
-        {
-            var calendar = new CronCalendar("* * 1-3 ? * *")
-            {
-                TimeZone = TimeZoneInfo.Utc
-            };
-            var dateTime = new DateTimeOffset(2017, 7, 27, 2, 0, 1, 123, TimeSpan.Zero);
-            Assert.That(calendar.IsTimeIncluded(dateTime), Is.False);
-        }
+    [Test]
+    public void TestClone()
+    {
+        CronCalendar calendar = new CronCalendar("0/15 * * * * ?");
+        CronCalendar clone = (CronCalendar)calendar.Clone();
+        Assert.That(clone.CronExpression, Is.EqualTo(calendar.CronExpression));
+    }
 
-        protected override CronCalendar GetTargetObject()
+    [Test]
+    public void MillisecondsShouldBeIgnored()
+    {
+        var calendar = new CronCalendar("* * 1-3 ? * *")
         {
-            return new CronCalendar("* * 1-3 ? * *")
-            {
-                Description = "my description"
-            };
-        }
+            TimeZone = TimeZoneInfo.Utc
+        };
+        var dateTime = new DateTimeOffset(2017, 7, 27, 2, 0, 1, 123, TimeSpan.Zero);
+        Assert.That(calendar.IsTimeIncluded(dateTime), Is.False);
+    }
 
-        protected override void VerifyMatch(CronCalendar original, CronCalendar deserialized)
+    protected override CronCalendar GetTargetObject()
+    {
+        return new CronCalendar("* * 1-3 ? * *")
         {
-            Assert.IsNotNull(deserialized);
-            Assert.AreEqual(original.Description, deserialized.Description);
-            Assert.AreEqual(original.CronExpression, deserialized.CronExpression);
-            Assert.AreEqual(original.TimeZone, deserialized.TimeZone);
-        }
+            Description = "my description"
+        };
+    }
+
+    protected override void VerifyMatch(CronCalendar original, CronCalendar deserialized)
+    {
+        Assert.Multiple(() =>
+        {
+            Assert.That(deserialized, Is.Not.Null);
+            Assert.That(deserialized.Description, Is.EqualTo(original.Description));
+            Assert.That(deserialized.CronExpression, Is.EqualTo(original.CronExpression));
+            Assert.That(deserialized.TimeZone, Is.EqualTo(original.TimeZone));
+        });
     }
 }

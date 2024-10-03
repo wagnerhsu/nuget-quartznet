@@ -1,30 +1,23 @@
-﻿using System;
-using System.IO;
-using System.Reflection;
+﻿namespace Quartz.Tests.Integration;
 
-using NUnit.Framework;
-
-namespace Quartz.Tests.Integration
+[SetUpFixture]
+public class TestAssemblySetup
 {
-    [SetUpFixture]
-    public class TestAssemblySetup
+    [OneTimeSetUp]
+    public void SetUp()
     {
-        [OneTimeSetUp]
-        public void SetUp()
+        // set default directory to make sure file loading works
+        // (https://youtrack.jetbrains.com/issue/RSRP-451142)
+        string codeBase = GetType().Assembly.Location;
+        string pathToUse = codeBase;
+        if (!codeBase.StartsWith('/'))
         {
-            // set default directory to make sure file loading works
-            // (https://youtrack.jetbrains.com/issue/RSRP-451142) 
-            string codeBase = GetType().GetTypeInfo().Assembly.Location;
-            string pathToUse = codeBase;
-            if (!codeBase.StartsWith("/"))
-            {
-                UriBuilder uri = new UriBuilder(codeBase);
-                string path = Uri.UnescapeDataString(uri.Path);
-                pathToUse = path;
-            }
-
-            pathToUse = Path.GetDirectoryName(pathToUse);
-            Directory.SetCurrentDirectory(pathToUse);
+            UriBuilder uri = new UriBuilder(codeBase);
+            string path = Uri.UnescapeDataString(uri.Path);
+            pathToUse = path;
         }
+
+        pathToUse = Path.GetDirectoryName(pathToUse);
+        Directory.SetCurrentDirectory(pathToUse);
     }
 }

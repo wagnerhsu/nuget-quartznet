@@ -19,155 +19,156 @@
 
 #endregion
 
-using System;
 using System.Data;
 using System.Data.Common;
 
-using Quartz.Logging;
+using Microsoft.Extensions.Logging;
 
-namespace Quartz.Impl.AdoJobStore
+using Quartz.Diagnostics;
+
+namespace Quartz.Impl.AdoJobStore;
+
+/// <summary>
+/// Unit of work for AdoJobStore operations.
+/// </summary>
+/// <author>Marko Lahma</author>
+public sealed class ConnectionAndTransactionHolder : IDisposable
 {
+    private DateTimeOffset? sigChangeForTxCompletion;
+
+    private readonly DbConnection connection;
+    private DbTransaction? transaction;
+
     /// <summary>
-    /// Unit of work for AdoJobStore operations.
+    /// Initializes a new instance of the <see cref="ConnectionAndTransactionHolder"/> class.
     /// </summary>
-    /// <author>Marko Lahma</author>
-    public class ConnectionAndTransactionHolder : IDisposable
+    /// <param name="connection">The connection.</param>
+    /// <param name="transaction">The transaction.</param>
+    public ConnectionAndTransactionHolder(DbConnection connection, DbTransaction? transaction)
     {
-        private static readonly ILog log = LogProvider.GetLogger(typeof(ConnectionAndTransactionHolder));
+        this.connection = connection;
+        this.transaction = transaction;
+    }
 
-        private DateTimeOffset? sigChangeForTxCompletion;
+    public DbConnection Connection => connection;
 
-        private readonly DbConnection connection;
-        private DbTransaction? transaction;
+    public DbTransaction? Transaction => transaction;
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="ConnectionAndTransactionHolder"/> class.
-        /// </summary>
-        /// <param name="connection">The connection.</param>
-        /// <param name="transaction">The transaction.</param>
-        public ConnectionAndTransactionHolder(DbConnection connection, DbTransaction? transaction)
-        {
-            this.connection = connection;
-            this.transaction = transaction;
-        }
+    public void Attach(DbCommand cmd)
+    {
+        cmd.Connection = connection;
+        cmd.Transaction = transaction;
+    }
 
-        public DbConnection Connection => connection;
-
-        public DbTransaction? Transaction => transaction;
-
-        public void Attach(DbCommand cmd)
-        {
-            cmd.Connection = connection;
-            cmd.Transaction = transaction;
-        }
-
-        public void Commit(bool openNewTransaction)
-        {
-            if (transaction != null)
-            {
-                try
-                {
-                    CheckNotZombied();
-                    IsolationLevel il = transaction.IsolationLevel;
-                    transaction.Commit();
-                    if (openNewTransaction)
-                    {
-                        // open new transaction to go with
-                        transaction = connection.BeginTransaction(il);
-                    }
-                }
-                catch (Exception e)
-                {
-                    throw new JobPersistenceException("Couldn't commit ADO.NET transaction. " + e.Message, e);
-                }
-            }
-        }
-
-        public void Close()
+    public async ValueTask Commit(bool openNewTransaction)
+    {
+        if (transaction is not null)
         {
             try
             {
-                connection.Close();
+                CheckNotZombied();
+                IsolationLevel il = transaction.IsolationLevel;
+                await transaction.CommitAsync().ConfigureAwait(false);
+                if (openNewTransaction)
+                {
+                    // open new transaction to go with
+                    transaction = await connection.BeginTransactionAsync(il).ConfigureAwait(false);
+                }
             }
             catch (Exception e)
             {
-                log.ErrorException(
-                    "Unexpected exception closing Connection." +
-                    "  This is often due to a Connection being returned after or during shutdown.", e);
+                ThrowHelper.ThrowJobPersistenceException("Couldn't commit ADO.NET transaction. " + e.Message, e);
             }
         }
+    }
 
-        public void Dispose()
+    public async ValueTask Close()
+    {
+        try
         {
-            try
-            {
-                connection?.Dispose();
-            }
-            catch
-            {
-                // ignored
-            }
-            try
-            {
-                transaction?.Dispose();
-            }
-            catch
-            {
-                // ignored
-            }
+            await connection.CloseAsync().ConfigureAwait(false);
         }
-
-        internal virtual DateTimeOffset? SignalSchedulingChangeOnTxCompletion
+        catch (Exception e)
         {
-            get => sigChangeForTxCompletion;
-            set
+            var log = LogProvider.CreateLogger<ConnectionAndTransactionHolder>();
+
+            log.LogError(e,
+                "Unexpected exception closing Connection." +
+                "  This is often due to a Connection being returned after or during shutdown.");
+        }
+    }
+
+    public void Dispose()
+    {
+        try
+        {
+            connection?.Dispose();
+        }
+        catch
+        {
+            // ignored
+        }
+        try
+        {
+            transaction?.Dispose();
+        }
+        catch
+        {
+            // ignored
+        }
+    }
+
+    internal DateTimeOffset? SignalSchedulingChangeOnTxCompletion
+    {
+        get => sigChangeForTxCompletion;
+        set
+        {
+            DateTimeOffset? sigTime = sigChangeForTxCompletion;
+            if (sigChangeForTxCompletion is null && value.HasValue)
             {
-                DateTimeOffset? sigTime = sigChangeForTxCompletion;
-                if (sigChangeForTxCompletion == null && value.HasValue)
+                sigChangeForTxCompletion = value;
+            }
+            else
+            {
+                if (sigChangeForTxCompletion is null || value < sigTime)
                 {
                     sigChangeForTxCompletion = value;
                 }
+            }
+        }
+    }
+
+    public async ValueTask Rollback(bool transientError)
+    {
+        if (transaction is not null)
+        {
+            try
+            {
+                CheckNotZombied();
+                await transaction.RollbackAsync().ConfigureAwait(false);
+            }
+            catch (Exception e)
+            {
+                var log = LogProvider.CreateLogger<ConnectionAndTransactionHolder>();
+                if (transientError)
+                {
+                    // original error was transient, ones we have in Azure, don't complain too much about it
+                    // we will try again anyway
+                    log.LogDebug("Rollback failed due to transient error");
+                }
                 else
                 {
-                    if (sigChangeForTxCompletion == null || value < sigTime)
-                    {
-                        sigChangeForTxCompletion = value;
-                    }
+                    log.LogError(e, "Couldn't rollback ADO.NET connection. {ExceptionMessage}", e.Message);
                 }
             }
         }
+    }
 
-        public void Rollback(bool transientError)
+    private void CheckNotZombied()
+    {
+        if (transaction is not null && transaction.Connection is null)
         {
-            if (transaction != null)
-            {
-                try
-                {
-                    CheckNotZombied();
-                    transaction.Rollback();
-                }
-                catch (Exception e)
-                {
-                    if (transientError)
-                    {
-                        // original error was transient, ones we have in Azure, don't complain too much about it
-                        // we will try again anyway
-                        log.Debug("Rollback failed due to transient error");
-                    }
-                    else
-                    {
-                        log.ErrorException("Couldn't rollback ADO.NET connection. " + e.Message, e);
-                    }
-                }
-            }
-        }
-
-        private void CheckNotZombied()
-        {
-            if (transaction != null && transaction.Connection == null)
-            {
-                throw new InvalidOperationException("Transaction not connected, or was disconnected");
-            }
+            ThrowHelper.ThrowInvalidOperationException("Transaction not connected, or was disconnected");
         }
     }
 }

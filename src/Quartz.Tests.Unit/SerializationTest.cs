@@ -1,230 +1,286 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
 using System.Runtime.Serialization.Formatters.Binary;
 
-using NUnit.Framework;
-
 using Quartz.Impl.Calendar;
+using Quartz.Impl.Matchers;
 using Quartz.Tests.Unit.Utils;
 using Quartz.Util;
 
-namespace Quartz.Tests.Unit
+namespace Quartz.Tests.Unit;
+
+[TestFixture]
+public class SerializationTest
 {
-    [TestFixture]
-    public class SerializationTest
+    [Test]
+    public void TestAnnualCalendarDeserialization()
     {
-        [Test]
-        public void TestAnnualCalendarDeserialization()
+        Deserialize<AnnualCalendar>();
+    }
+
+    [Test]
+    public void TestAnnualCalendarSerialization()
+    {
+        AnnualCalendar annualCalendar = new AnnualCalendar();
+        DateTime day = new DateTime(2011, 12, 20, 0, 0, 0);
+        annualCalendar.SetDayExcluded(day, true);
+        AnnualCalendar clone = annualCalendar.DeepClone();
+        Assert.That(clone.IsDayExcluded(day), Is.True);
+    }
+
+    [Test]
+    public void TestBaseCalendarDeserialization()
+    {
+        Deserialize<BaseCalendar>();
+    }
+
+    [Test]
+    public void TestBaseCalendarSerialization()
+    {
+        BaseCalendar baseCalendar = new BaseCalendar();
+        TimeZoneInfo timeZone = TimeZoneInfo.GetSystemTimeZones()[3];
+        baseCalendar.TimeZone = timeZone;
+        BaseCalendar clone = baseCalendar.DeepClone();
+        Assert.That(clone.TimeZone.Id, Is.EqualTo(timeZone.Id));
+    }
+
+    [Test]
+    public void TestCronCalendarDeserialization()
+    {
+        Deserialize<CronCalendar>();
+    }
+
+    [Test]
+    public void TestCronCalendarSerialization()
+    {
+        CronCalendar cronCalendar = new CronCalendar("* * 8-17 ? * *");
+        CronCalendar clone = cronCalendar.DeepClone();
+        Assert.That(clone.CronExpression.CronExpressionString, Is.EqualTo("* * 8-17 ? * *"));
+    }
+
+    [Test]
+    public void TestDailyCalendarDeserialization()
+    {
+        Deserialize<DailyCalendar>();
+    }
+
+    [Test]
+    public void TestDailyCalendarSerialization()
+    {
+        DailyCalendar dailyCalendar = new DailyCalendar("12:13:14:150", "13:14");
+        DailyCalendar clone = dailyCalendar.DeepClone();
+
+        DateTimeOffset timeRangeStartTimeUtc = clone.GetTimeRangeStartingTimeUtc(DateTimeOffset.UtcNow);
+        Assert.Multiple(() =>
         {
-            Deserialize<AnnualCalendar>();
-        }
+            Assert.That(timeRangeStartTimeUtc.Hour, Is.EqualTo(12));
+            Assert.That(timeRangeStartTimeUtc.Minute, Is.EqualTo(13));
+            Assert.That(timeRangeStartTimeUtc.Second, Is.EqualTo(14));
+            Assert.That(timeRangeStartTimeUtc.Millisecond, Is.EqualTo(150));
+        });
 
-        [Test]
-        public void TestAnnualCalendarSerialization()
+        DateTimeOffset timeRangeEndingTimeUtc = clone.GetTimeRangeEndingTimeUtc(DateTimeOffset.UtcNow);
+
+        Assert.Multiple(() =>
         {
-            AnnualCalendar annualCalendar = new AnnualCalendar();
-            DateTime day = new DateTime(2011, 12, 20, 0, 0, 0);
-            annualCalendar.SetDayExcluded(day, true);
-            AnnualCalendar clone = annualCalendar.DeepClone();
-            Assert.IsTrue(clone.IsDayExcluded(day));
-        }
+            Assert.That(timeRangeEndingTimeUtc.Hour, Is.EqualTo(13));
+            Assert.That(timeRangeEndingTimeUtc.Minute, Is.EqualTo(14));
+            Assert.That(timeRangeEndingTimeUtc.Second, Is.EqualTo(0));
+            Assert.That(timeRangeEndingTimeUtc.Millisecond, Is.EqualTo(0));
+        });
+    }
 
-        [Test]
-        public void TestBaseCalendarDeserialization()
+    [Test]
+    [Ignore("requires binary serilization to be done with 2.4, 2.3 in test is non-compliant")]
+    public void TestHolidayCalendarDeserialization()
+    {
+        var calendar = Deserialize<HolidayCalendar>();
+        Assert.That(calendar.ExcludedDates, Has.Count.EqualTo(1));
+
+        calendar = Deserialize<HolidayCalendar>(23);
+        Assert.That(calendar.ExcludedDates, Has.Count.EqualTo(1));
+
+        BinaryFormatter formatter = new BinaryFormatter();
+        using (var stream = new MemoryStream())
         {
-            Deserialize<BaseCalendar>();
-        }
+            calendar = new HolidayCalendar();
+            calendar.AddExcludedDate(DateTime.Now.Date);
+            formatter.Serialize(stream, calendar);
 
-        [Test]
-        public void TestBaseCalendarSerialization()
+            stream.Seek(0, SeekOrigin.Begin);
+            stream.Position = 0;
+
+            calendar = (HolidayCalendar) formatter.Deserialize(stream);
+            Assert.That(calendar.ExcludedDates, Has.Count.EqualTo(1));
+        }
+    }
+
+    [Test]
+    public void TestHolidayCalendarSerialization()
+    {
+        HolidayCalendar holidayCalendar = new HolidayCalendar();
+        holidayCalendar.AddExcludedDate(new DateTime(2010, 1, 20));
+        HolidayCalendar clone = holidayCalendar.DeepClone();
+        Assert.That(clone.ExcludedDates, Has.Count.EqualTo(1));
+    }
+
+    [Test]
+    public void TestMonthlyCalendarDeserialization()
+    {
+        Deserialize<MonthlyCalendar>();
+    }
+
+    [Test]
+    public void TestMonthlyCalendarSerialization()
+    {
+        MonthlyCalendar monthlyCalendar = new MonthlyCalendar();
+        monthlyCalendar.SetDayExcluded(20, true);
+        MonthlyCalendar clone = monthlyCalendar.DeepClone();
+        Assert.That(clone.IsDayExcluded(20), Is.True);
+    }
+
+    [Test]
+    public void TestWeeklyCalendarDeserialization()
+    {
+        Deserialize<WeeklyCalendar>();
+    }
+
+    [Test]
+    public void TestWeeklyCalendarSerialization()
+    {
+        WeeklyCalendar weeklyCalendar = new WeeklyCalendar();
+        weeklyCalendar.SetDayExcluded(DayOfWeek.Monday, true);
+        WeeklyCalendar clone = weeklyCalendar.DeepClone();
+        Assert.That(clone.IsDayExcluded(DayOfWeek.Monday), Is.True);
+    }
+
+    /* TODO
+    [Test]
+    public void TestTreeSetDeserialization()
+    {
+        Deserialize<TreeSet>();
+    }
+
+    [Test]
+    public void TestTreeSetSerialization()
+    {
+        new TreeSet<string>().DeepClone();
+    }
+    */
+
+    [Test]
+    public void TestHashSetSerialization()
+    {
+        new HashSet<string>().DeepClone();
+    }
+
+    [Test]
+    public void TestJobDataMapDeserialization()
+    {
+        JobDataMap map = Deserialize<JobDataMap>();
+        Assert.Multiple(() =>
         {
-            BaseCalendar baseCalendar = new BaseCalendar();
-            TimeZoneInfo timeZone = TimeZoneInfo.GetSystemTimeZones()[3];
-            baseCalendar.TimeZone = timeZone;
-            BaseCalendar clone = baseCalendar.DeepClone();
-            Assert.AreEqual(timeZone.Id, clone.TimeZone.Id);
-        }
+            Assert.That(map["foo"], Is.EqualTo("bar"));
+            Assert.That(map["num"], Is.EqualTo(123));
+        });
+    }
 
-        [Test]
-        public void TestCronCalendarDeserialization()
+    [Test]
+    public void TestJobDataMapSerialization()
+    {
+        JobDataMap map = new JobDataMap
         {
-            Deserialize<CronCalendar>();
-        }
-
-        [Test]
-        public void TestCronCalendarSerialization()
+            ["foo"] = "bar",
+            ["num"] = 123
+        };
+        JobDataMap clone = map.DeepClone();
+        Assert.Multiple(() =>
         {
-            CronCalendar cronCalendar = new CronCalendar("* * 8-17 ? * *");
-            CronCalendar clone = cronCalendar.DeepClone();
-            Assert.AreEqual("* * 8-17 ? * *", clone.CronExpression.CronExpressionString);
-        }
+            Assert.That(clone["foo"], Is.EqualTo("bar"));
+            Assert.That(clone["num"], Is.EqualTo(123));
+        });
+    }
 
-        [Test]
-        public void TestDailyCalendarDeserialization()
+    [Test]
+    public void TestStringKeyDirtyFlagMapSerialization()
+    {
+        StringKeyDirtyFlagMap map = new StringKeyDirtyFlagMap
         {
-            Deserialize<DailyCalendar>();
-        }
+            ["foo"] = "bar",
+            ["num"] = 123
+        };
 
-        [Test]
-        public void TestDailyCalendarSerialization()
+        StringKeyDirtyFlagMap clone = map.DeepClone();
+        Assert.Multiple(() =>
         {
-            DailyCalendar dailyCalendar = new DailyCalendar("12:13:14:150", "13:14");
-            DailyCalendar clone = dailyCalendar.DeepClone();
+            Assert.That(clone["foo"], Is.EqualTo("bar"));
+            Assert.That(clone["num"], Is.EqualTo(123));
+        });
+    }
 
-            DateTimeOffset timeRangeStartTimeUtc = clone.GetTimeRangeStartingTimeUtc(DateTimeOffset.UtcNow);
-            Assert.AreEqual(12, timeRangeStartTimeUtc.Hour);
-            Assert.AreEqual(13, timeRangeStartTimeUtc.Minute);
-            Assert.AreEqual(14, timeRangeStartTimeUtc.Second);
-            Assert.AreEqual(150, timeRangeStartTimeUtc.Millisecond);
-
-            DateTimeOffset timeRangeEndingTimeUtc = clone.GetTimeRangeEndingTimeUtc(DateTimeOffset.UtcNow);
-
-            Assert.AreEqual(13, timeRangeEndingTimeUtc.Hour);
-            Assert.AreEqual(14, timeRangeEndingTimeUtc.Minute);
-            Assert.AreEqual(0, timeRangeEndingTimeUtc.Second);
-            Assert.AreEqual(0, timeRangeEndingTimeUtc.Millisecond);
-        }
-
-        [Test]
-        [Ignore("requires binary serilization to be done with 2.4, 2.3 in test is non-compliant")]
-        public void TestHolidayCalendarDeserialization()
+    [Test]
+    public void TestSchedulerContextSerialization()
+    {
+        SchedulerContext map = new SchedulerContext
         {
-            var calendar = Deserialize<HolidayCalendar>();
-            Assert.That(calendar.ExcludedDates.Count, Is.EqualTo(1));
+            ["foo"] = "bar",
+            ["num"] = 123
+        };
 
-            calendar = Deserialize<HolidayCalendar>(23);
-            Assert.That(calendar.ExcludedDates.Count, Is.EqualTo(1));
-
-            BinaryFormatter formatter = new BinaryFormatter();
-            using (var stream = new MemoryStream())
-            {
-                calendar = new HolidayCalendar();
-                calendar.AddExcludedDate(DateTime.Now.Date);
-                formatter.Serialize(stream, calendar);
-
-                stream.Seek(0, SeekOrigin.Begin);
-                stream.Position = 0;
-
-                calendar = (HolidayCalendar) formatter.Deserialize(stream);
-                Assert.That(calendar.ExcludedDates.Count, Is.EqualTo(1));
-            }
-        }
-
-        [Test]
-        public void TestHolidayCalendarSerialization()
+        SchedulerContext clone = map.DeepClone();
+        Assert.Multiple(() =>
         {
-            HolidayCalendar holidayCalendar = new HolidayCalendar();
-            holidayCalendar.AddExcludedDate(new DateTime(2010, 1, 20));
-            HolidayCalendar clone = holidayCalendar.DeepClone();
-            Assert.AreEqual(1, clone.ExcludedDates.Count);
-        }
+            Assert.That(clone["foo"], Is.EqualTo("bar"));
+            Assert.That(clone["num"], Is.EqualTo(123));
+        });
+    }
 
-        [Test]
-        public void TestMonthlyCalendarDeserialization()
+    [Test]
+    public void TestGroupMatcherSerialization()
+    {
+        GroupMatcher<TriggerKey> expected = GroupMatcher<TriggerKey>.GroupEquals(SchedulerConstants.DefaultGroup);
+
+        GroupMatcher<TriggerKey> got = SerializeAndDeserialize(expected);
+
+        Assert.Multiple(() =>
         {
-            Deserialize<MonthlyCalendar>();
-        }
+            Assert.That(got.CompareToValue, Is.EqualTo(expected.CompareToValue));
+            Assert.That(got.CompareWithOperator, Is.EqualTo(expected.CompareWithOperator));
+        });
+    }
 
-        [Test]
-        public void TestMonthlyCalendarSerialization()
+    [Test]
+    public void TestNameMatcherSerialization()
+    {
+        NameMatcher<JobKey> expected = NameMatcher<JobKey>.NameContains("foo");
+
+        NameMatcher<JobKey> got = SerializeAndDeserialize(expected);
+
+        Assert.Multiple(() =>
         {
-            MonthlyCalendar monthlyCalendar = new MonthlyCalendar();
-            monthlyCalendar.SetDayExcluded(20, true);
-            MonthlyCalendar clone = monthlyCalendar.DeepClone();
-            Assert.IsTrue(clone.IsDayExcluded(20));
-        }
+            Assert.That(got.CompareToValue, Is.EqualTo(expected.CompareToValue));
+            Assert.That(got.CompareWithOperator, Is.EqualTo(expected.CompareWithOperator));
+        });
+    }
 
-        [Test]
-        public void TestWeeklyCalendarDeserialization()
-        {
-            Deserialize<WeeklyCalendar>();
-        }
+    private static T SerializeAndDeserialize<T>(T instance) where T : class
+    {
+        BinaryFormatter formatter = new();
+        using MemoryStream stream = new();
 
-        [Test]
-        public void TestWeeklyCalendarSerialization()
-        {
-            WeeklyCalendar weeklyCalendar = new WeeklyCalendar();
-            weeklyCalendar.SetDayExcluded(DayOfWeek.Monday, true);
-            WeeklyCalendar clone = weeklyCalendar.DeepClone();
-            Assert.IsTrue(clone.IsDayExcluded(DayOfWeek.Monday));
-        }
+        formatter.Serialize(stream, instance);
+        stream.Position = 0;
 
-        /* TODO
-        [Test]
-        public void TestTreeSetDeserialization()
-        {
-            Deserialize<TreeSet>();
-        }
+        return (T)formatter.Deserialize(stream)!;
+    }
 
-        [Test]
-        public void TestTreeSetSerialization()
-        {
-            new TreeSet<string>().DeepClone();
-        }
-        */
+    private static T Deserialize<T>() where T : class
+    {
+        return Deserialize<T>(10);
+    }
 
-        [Test]
-        public void TestHashSetSerialization()
-        {
-            new HashSet<string>().DeepClone();
-        }
-
-        [Test]
-        public void TestJobDataMapDeserialization()
-        {
-            JobDataMap map = Deserialize<JobDataMap>();
-            Assert.AreEqual("bar", map["foo"]);
-            Assert.AreEqual(123, map["num"]);
-        }
-
-        [Test]
-        public void TestJobDataMapSerialization()
-        {
-            JobDataMap map = new JobDataMap();
-            map["foo"] = "bar";
-            map["num"] = 123;
-            JobDataMap clone = map.DeepClone();
-            Assert.AreEqual("bar", clone["foo"]);
-            Assert.AreEqual(123, clone["num"]);
-        }
-
-        [Test]
-        public void TestStringKeyDirtyFlagMapSerialization()
-        {
-            StringKeyDirtyFlagMap map = new StringKeyDirtyFlagMap();
-            map["foo"] = "bar";
-            map["num"] = 123;
-
-            StringKeyDirtyFlagMap clone = map.DeepClone();
-            Assert.AreEqual("bar", clone["foo"]);
-            Assert.AreEqual(123, clone["num"]);
-        }
-
-        [Test]
-        public void TestSchedulerContextSerialization()
-        {
-            SchedulerContext map = new SchedulerContext();
-            map["foo"] = "bar";
-            map["num"] = 123;
-
-            SchedulerContext clone = map.DeepClone();
-            Assert.AreEqual("bar", clone["foo"]);
-            Assert.AreEqual(123, clone["num"]);
-        }
-
-        private static T Deserialize<T>() where T : class
-        {
-            return Deserialize<T>(10);
-        }
-
-        private static T Deserialize<T>(int version) where T : class
-        {
-            BinaryFormatter formatter = new BinaryFormatter();
-            using (var stream = File.OpenRead(Path.Combine("Serialized", typeof(T).Name + "_" + version + ".ser")))
-            {
-                return (T) formatter.Deserialize(stream);
-            }
-        }
+    private static T Deserialize<T>(int version) where T : class
+    {
+        BinaryFormatter formatter = new BinaryFormatter();
+        using var stream = File.OpenRead(Path.Combine("Serialized", typeof(T).Name + "_" + version + ".ser"));
+        return (T) formatter.Deserialize(stream);
     }
 }

@@ -19,84 +19,106 @@
 
 #endregion
 
-using System;
+namespace Quartz.Impl.Matchers;
 
-namespace Quartz.Impl.Matchers
+/// <summary>
+/// Operators available for comparing string values.
+/// </summary>
+[Serializable]
+public abstract class StringOperator : IEquatable<StringOperator>
 {
-    /// <summary>
-    /// Operators available for comparing string values.
-    /// </summary>
+    public static readonly StringOperator Equality = new EqualityOperator();
+    public static readonly StringOperator StartsWith = new StartsWithOperator();
+    public static readonly StringOperator EndsWith = new EndsWithOperator();
+    public static readonly StringOperator Contains = new ContainsOperator();
+    public static readonly StringOperator Anything = new AnythingOperator();
+
+    public abstract bool Evaluate(string value, string compareTo);
+
     [Serializable]
-    public abstract class StringOperator : IEquatable<StringOperator>
+    private sealed class EqualityOperator : StringOperator
     {
-        public static readonly StringOperator Equality = new EqualityOperator();
-        public static readonly StringOperator StartsWith = new StartsWithOperator();
-        public static readonly StringOperator EndsWith = new EndsWithOperator();
-        public static readonly StringOperator Contains = new ContainsOperator();
-        public static readonly StringOperator Anything = new AnythingOperator();
-
-        public abstract bool Evaluate(string value, string compareTo);
-
-        [Serializable]
-        private class EqualityOperator : StringOperator
+        public override bool Evaluate(string value, string compareTo)
         {
-            public override bool Evaluate(string value, string compareTo) {
-                return value.Equals(compareTo);
-            }
+            return value == compareTo;
         }
+    }
 
-        [Serializable]
-        private class StartsWithOperator : StringOperator
+    [Serializable]
+    private sealed class StartsWithOperator : StringOperator
+    {
+        public override bool Evaluate(string value, string compareTo)
         {
-            public override bool Evaluate(string value, string compareTo) {
-                return value.StartsWith(compareTo);
-            }
+            return value is not null && value.StartsWith(compareTo);
         }
+    }
 
-        [Serializable]
-        private class EndsWithOperator : StringOperator
+    [Serializable]
+    private sealed class EndsWithOperator : StringOperator
+    {
+        public override bool Evaluate(string value, string compareTo)
         {
-             public override bool Evaluate(string value, string compareTo) {
-                return value.EndsWith(compareTo);
-            }
+            return value is not null && value.EndsWith(compareTo);
         }
+    }
 
-        [Serializable]
-        private class ContainsOperator : StringOperator
+    [Serializable]
+    private sealed class ContainsOperator : StringOperator
+    {
+        public override bool Evaluate(string value, string compareTo)
         {
-            public override bool Evaluate(string value, string compareTo) {
-                return value.Contains(compareTo);
-            }
+            return value is not null && value.Contains(compareTo);
         }
+    }
 
-        [Serializable]
-        private class AnythingOperator : StringOperator
+    [Serializable]
+    private sealed class AnythingOperator : StringOperator
+    {
+        public override bool Evaluate(string value, string compareTo)
         {
-            public override bool Evaluate(string value, string compareTo)
-            {
-                return true;
-            }
+            return true;
         }
+    }
 
-        public override bool Equals(object? obj)
-        {
-            return Equals(obj as StringOperator);
-        }
+    /// <summary>
+    /// Returns a value indicating whether this instance and a specified <see cref="object"/> are considered
+    /// equal.
+    /// </summary>
+    /// <param name="obj">An <see cref="object"/> to compare with this instance.</param>
+    /// <returns>
+    /// <see langword="true"/> if the current <see cref="StringOperator"/> and <paramref name="obj"/>
+    /// are the same instance, or the <see cref="Type"/> of the current <see cref="StringOperator"/>
+    /// equals that of <paramref name="obj"/>; otherwise, <see langword="true"/>.
+    /// </returns>
+    public override bool Equals(object? obj)
+    {
+        return Equals(obj as StringOperator);
+    }
 
-        public bool Equals(StringOperator? other)
-        {
-            if (other == null)
-            {
-                return false;
-            }
+    /// <summary>
+    /// Returns a value indicating whether this instance and a specified <see cref="StringOperator"/>
+    /// instance are considered equal.
+    /// </summary>
+    /// <param name="other">An <see cref="StringOperator"/> to compare with this instance.</param>
+    /// <returns>
+    /// <see langword="true"/> if the current <see cref="StringOperator"/> and <paramref name="other"/>
+    /// are the same instance, or the <see cref="Type"/> of the current <see cref="StringOperator"/> equals
+    /// that of <paramref name="other"/>; otherwise, <see langword="true"/>.
+    /// </returns>
+    public virtual bool Equals(StringOperator? other)
+    {
+        return other is not null && GetType() == other.GetType();
+    }
 
-            // just check by type, equality based on behavior
-            return GetType() == other.GetType();
-        }
-
-        public override int GetHashCode()
-        {
-            return GetType().GetHashCode();
-        }
+    /// <summary>
+    /// Returns the hash code for the <see cref="StringOperator"/>.
+    /// </summary>
+    /// <returns>
+    /// The hash code of the <see cref="Type"/> of the current <see cref="StringOperator"/>
+    /// instance.
+    /// </returns>
+    public override int GetHashCode()
+    {
+        return GetType().GetHashCode();
     }
 }

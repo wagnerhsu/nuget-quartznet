@@ -1,38 +1,45 @@
-﻿using System;
-using System.Collections.Generic;
+namespace Quartz.Util;
 
-namespace Quartz.Util
+internal static class SortedSetExtensions
 {
-    internal static class SortedSetExtensions
+    internal static bool TryGetMinValueStartingFrom(this SortedSet<int> set, DateTimeOffset start, bool allowValueBeforeStartDay, out int minimumDay)
     {
-        internal static SortedSet<int> TailSet(this SortedSet<int> set, int value)
+        minimumDay = set.Min;
+        var startDay = start.Day;
+
+        if (set.Contains(CronExpressionConstants.AllSpec) || set.Contains(startDay))
         {
-            return set.GetViewBetween(value, 9999999);
+            minimumDay = startDay;
+            return true;
         }
 
-        /// <summary>
-        /// Returns the first element of the specified <see cref="SortedSet{TSource}"/>, or a default
-        /// value if no element is found.
-        /// </summary>
-        /// <typeparam name="TSource">The type of the elements of <paramref name="source"/>.</typeparam>
-        /// <param name="source">The <see cref="SortedSet{TSource}"/> to return the first element of.</param>
-        /// <returns>
-        /// The default value for <typeparamref name="TSource"/> if <paramref name="source"/> is empty;
-        /// otherwise, the first element in <paramref name="source"/>.
-        /// </returns>
-        /// <exception cref="ArgumentNullException"><paramref name="source"/> is <see langword="null"/>.</exception>
-        internal static TSource? FirstOrDefault<TSource>(this SortedSet<TSource> source) where TSource : class
+        // In cases such as W modifier finding a match earlier than the month day.
+        // If the flag allowValueBeforeStartDay is set and the minimum value is less than the start day, return the minimum value 
+        if (allowValueBeforeStartDay && set.Min < startDay)
         {
-            if (source == null)
-                throw new ArgumentNullException(nameof(source));
-
-            using var enumerator = source.GetEnumerator();
-            if (!enumerator.MoveNext())
-            {
-                return null;
-            }
-
-            return enumerator.Current;
+            return true;
         }
+        
+        // If the set is empty or the maximum value is less than the start day, no suitable value is found
+        if (set.Count == 0 || set.Max < startDay)
+        {
+            return false;
+        }
+
+        // If the minimum value is greater than or equal to the start day, return the minimum value
+        if (set.Min >= startDay)
+        {
+            return true;
+        }
+
+        // slow path
+        var view = set.GetViewBetween(startDay, int.MaxValue);
+        if (view.Count > 0)
+        {
+            minimumDay = view.Min;
+            return true;
+        }
+
+        return false;
     }
 }
